@@ -1,31 +1,111 @@
-description: Template of petclinic_microservice
-name: PoC2_petclinic_microservice_jgkong
-service0:
+---
+name: "PoC2 Toolchain Template"
+description: "PoC2 Toolchain Template"
+version: '0.1'
+required: 
+  - deploy
+  - service_github
+  - service_slack
+
+# Repo.
+service_github:
+  service_id: githubpublic
   parameters:
-    configuration: null
-    name: PoC2-customers-service-jgkong
-    services: null
-    ui-pipeline: null
+    repo_name: spring-petclinic-microservices
+    repo_url: https://github.com/sdevopsadm/spring-petclinic-microservices
+    type: clone
+    has_issues: true
+    
+# Nexus
+service2:
+  parameters:
+    dashboard_url: ''
+    label: ''
+    mirror_url: ''
+    name: ''
+    release_url: ''
+    snapshot_url: ''
+    type: npm
+    user_id: ""
+  service_id: nexus
+
+# pipelines
+service_pipeline_api_gateway:
   service_id: pipeline
-service1:
+  parameters:
+    services:
+      - service_github
+    name: pipeline-api-gateway
+    configuration:
+      content:
+        $text: pipeline-api-gateway.yml
+      env:
+        LOGICAL_APP_NAME: API Gateway
+        SERVICE_API_REPO: service_github
+        PROD_SPACE_NAME: "{{deploy.parameters.prod-space}}"
+        PROD_ORG_NAME: "{{deploy.parameters.prod-organization}}"
+        PROD_REGION_ID: "{{deploy.parameters.prod-region}}"
+    execute: true
+service_pipeline_customers_service:
+  service_id: pipeline
+  parameters:
+    services:
+      - service_github
+    name: pipeline-customers-service
+    configuration:
+      content:
+        $text: pipeline-customers-service.yml
+      env:
+        LOGICAL_APP_NAME: Customers Service
+        SERVICE_API_REPO: service_github
+        PROD_SPACE_NAME: "{{deploy.parameters.prod-space}}"
+        PROD_ORG_NAME: "{{deploy.parameters.prod-organization}}"
+        PROD_REGION_ID: "{{deploy.parameters.prod-region}}"
+    execute: true
+service_pipeline_vets_service:
+  service_id: pipeline
+  parameters:
+    services:
+      - service_github
+    name: pipeline-vets-service
+    configuration:
+      content:
+        $text: pipeline-vets-service.yml
+      env:
+        LOGICAL_APP_NAME: Vets Service
+        SERVICE_API_REPO: service_github
+        PROD_SPACE_NAME: "{{deploy.parameters.prod-space}}"
+        PROD_ORG_NAME: "{{deploy.parameters.prod-organization}}"
+        PROD_REGION_ID: "{{deploy.parameters.prod-region}}"
+    execute: true
+service_pipeline_visits_service:
+  service_id: pipeline
+  parameters:
+    services:
+      - service_github
+    name: pipeline-visits-service
+    configuration:
+      content:
+        $text: pipeline-visits-service.yml
+      env:
+        LOGICAL_APP_NAME: Visits Service
+        SERVICE_API_REPO: service_github
+        PROD_SPACE_NAME: "{{deploy.parameters.prod-space}}"
+        PROD_ORG_NAME: "{{deploy.parameters.prod-organization}}"
+        PROD_REGION_ID: "{{deploy.parameters.prod-region}}"
+    execute: true
+
+# Slack
+service_slack:
   parameters:
     api_token: ''
     channel_name: ''
     label: ''
     team_url: ''
   service_id: slack
-service2:
-  parameters:
-    dashboard_url: ''
-    label: Nexus xxx00
-    mirror_url: ''
-    name: Nexus xxx00
-    release_url: ''
-    snapshot_url: ""
-    type: npm
-    user_id: ""
-  service_id: nexus
-service3:
+
+# draservicebroker
+service_dra:
   parameters:
     cf_controller: https://api.ng.bluemix.net
     dashboard_url: ''
@@ -36,49 +116,17 @@ service3:
       dashboard_url: ''
     type: default
   service_id: draservicebroker
-service4:
-  parameters:
-    configuration: null
-    name: PoC2-vets-service-jgkong
-    services: null
-    ui-pipeline: null
-  service_id: pipeline
+
+# apm
 service5:
   parameters: {}
   service_id: apm
-service6:
+    
+#Deployment
+deploy:
+  #schema: deploy.json
+  service-category: pipeline
   parameters:
-    api_root_url: https://api.github.com
-    enable_traceability: true
-    extra_capabilities:
-    - capability_id: git.issues
-      dashboard_url: https://github.com/sdevopsadm/spring-petclinic-microservices/issues
-      display_name: Issues
-      enabled: true
-      label: spring-petclinic-microservices
-      tags:
-      - think
-      - code
-    has_issues: true
-    label: spring-petclinic-microservices
-    owner_id: sdevopsadm
-    private_repo: false
-    repo_name: spring-petclinic-microservices
-    repo_url: https://github.com/sdevopsadm/spring-petclinic-microservices.git
-    token_url: https://otc-github-public-broker.ng.bluemix.net/github/token
-    type: new
-  service_id: githubpublic
-service7:
-  parameters:
-    configuration: null
-    name: PoC2-api-gateway-jgkong
-    services: null
-    ui-pipeline: null
-  service_id: pipeline
-service8:
-  parameters:
-    configuration: null
-    name: PoC2-visits-service-jgkong
-    services: null
-    ui-pipeline: null
-  service_id: pipeline
+    prod-region: "{{region}}"
+    prod-organization: "{{organization}}"
+    prod-space: POC
