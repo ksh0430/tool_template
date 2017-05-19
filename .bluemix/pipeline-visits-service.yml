@@ -4,7 +4,7 @@ stages:
   inputs:
   - type: git
     branch: bluemix
-    service: $SERVICE_API_REPO}
+    service: ${SERVICE_API_REPO}
   triggers:
   - type: commit
   properties:
