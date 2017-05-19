@@ -18,6 +18,8 @@ stages:
       export JAVA_HOME=$JAVA8_HOME
       
       mvn -B package
+
+      cp ./src/main/docker/Dockerfile $ARCHIVE_DIR
 - name: Test
   inputs:
   - type: job
