@@ -208,5 +208,5 @@ stages:
       \ \"${red}Executed failed or had warnings ${no_color}\"\n    ${EXT_DIR}/print_help.sh\n\
       \    exit $RESULT\nfi\necho -e \"${green}Execution complete${no_label}\""
     PORT: '8081'
-    CONTAINER_NAME: spring-petclinic-customers-service-201705
+    CONTAINER_NAME: ''
     DEPLOY_TYPE: red_black
