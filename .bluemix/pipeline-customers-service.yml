@@ -3,7 +3,7 @@ stages:
 - name: Build
   inputs:
   - type: git
-    branch: bluemix
+    branch: master
     service: ${SERVICE_API_REPO}
   triggers:
   - type: commit
