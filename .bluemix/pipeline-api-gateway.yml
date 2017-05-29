@@ -144,6 +144,25 @@ stages:
     dir_name: null
   triggers:
   - type: stage
+  properties:
+  - name: CMD
+    value: java -Djava.security.egd=file:/dev/./urandom -jar /app.jar --server.port=8081
+    type: text
+  - name: ROUTE_HOSTNAME
+    value: api-gateway-container-test1
+    type: text
+  - name: ROUTE_DOMAIN
+    value: mybluemix.net
+    type: text
+  - name: DESIRED_INSTANCES
+    value: '1'
+    type: text
+  - name: LOGICAL_ENV_NAME
+    value: TEST
+    type: text
+  - name: APP_URL
+    value: http://api-gateway-sp.mybluemix.net/#!/welcome
+    type: text
   jobs:
   - name: Deploy to Bluemix container service
     type: deployer
@@ -157,7 +176,8 @@ stages:
       \ deployment script${no_color}\"\n\n\n# To view/fork this script goto: https://github.com/Osthanes/deployscripts\n\
       # git_retry will retry git calls to prevent pipeline failure on temporary github\
       \ problems\n# the code can be found in git_util.sh at https://github.com/Osthanes/container_deployer\n\
-      git_retry clone https://github.com/Osthanes/deployscripts.git deployscripts\n\
+      #git_retry clone https://github.com/Osthanes/deployscripts.git deployscripts\n\
+      git_retry clone https://github.com/sdevopsadm/deployscripts.git deployscripts\n\
       \n\n# You can deploy your Image as either a single Container or as a Container\
       \ \n# Group.  A Container Group deploys a number of containers to enhance\n\
       # scalability or reliability.  By default we will deploy as a single \n# container.\
@@ -208,4 +228,6 @@ stages:
       \ \"${red}Executed failed or had warnings ${no_color}\"\n    ${EXT_DIR}/print_help.sh\n\
       \    exit $RESULT\nfi\necho -e \"${green}Execution complete${no_label}\""
     PORT: '8081'
+    CONTAINER_NAME: spring-petclinic-api-gateway-201705
     DEPLOY_TYPE: red_black
+
