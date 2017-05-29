@@ -86,7 +86,7 @@ stages:
   inputs:
   - type: job
     stage: Build
-    job: Package-api-gateway
+    job: Package-customers-service
     dir_name: null
   triggers:
   - type: stage
@@ -134,7 +134,7 @@ stages:
       # Copy any artifacts that will be needed for deployment and testing to $WORKSPACE\
       \    #\n######################################################################################\n\
       echo \"IMAGE_NAME=${FULL_REPOSITORY_NAME}\" >> $ARCHIVE_DIR/build.properties"
-    IMAGE_NAME: image-spring-petclinic-api-gateway
+    IMAGE_NAME: image-spring-petclinic-customers-service
     USE_CACHED_LAYERS: 'true'
 - name: Deploy to Test
   inputs:
@@ -149,7 +149,7 @@ stages:
     value: java -Djava.security.egd=file:/dev/./urandom -jar /app.jar --server.port=8081
     type: text
   - name: ROUTE_HOSTNAME
-    value: api-gateway-container-test1
+    value: customers-service-container-test1
     type: text
   - name: ROUTE_DOMAIN
     value: mybluemix.net
@@ -161,7 +161,7 @@ stages:
     value: TEST
     type: text
   - name: APP_URL
-    value: http://api-gateway-sp.mybluemix.net/#!/welcome
+    value: ''
     type: text
   jobs:
   - name: Deploy to Bluemix container service
@@ -230,4 +230,3 @@ stages:
     PORT: '8081'
     CONTAINER_NAME: spring-petclinic-customers-service-201705
     DEPLOY_TYPE: red_black
-
