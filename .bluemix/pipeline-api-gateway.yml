@@ -161,7 +161,7 @@ stages:
     value: TEST
     type: text
   - name: APP_URL
-    value: http://api-gateway-sp.mybluemix.net/#!/welcome
+    value: ''
     type: text
   jobs:
   - name: Deploy to Bluemix container service
@@ -230,4 +230,3 @@ stages:
     PORT: '8081'
     CONTAINER_NAME: spring-petclinic-api-gateway-201705
     DEPLOY_TYPE: red_black
-
