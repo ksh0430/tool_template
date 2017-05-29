@@ -2,12 +2,8 @@
 name: "PoC2 Toolchain Template"
 description: "PoC2 Toolchain Template"
 version: '0.1'
-required: 
-  - deploy
-  - service_github
-  - service_slack
 
-# Repo.
+# GitHub
 service_github:
   service_id: githubpublic
   parameters:
@@ -15,7 +11,23 @@ service_github:
     repo_url: https://github.com/sdevopsadm/spring-petclinic-microservices
     type: clone
     has_issues: true
-    
+
+# Orion Web IDE
+service_orion:
+  parameters:
+    container_url: ""
+    dashboard_url: ""
+    toolchain_id: ""
+  service_id: orion
+
+# SauceLabs
+service_saucelabs:
+  service_id: saucelabs
+  parameters:
+    key: ''
+    label: ''
+    username: ''
+
 # Nexus
 service2:
   parameters:
@@ -118,10 +130,10 @@ service_dra:
   service_id: draservicebroker
 
 # apm
-service5:
+service_apm:
   parameters: {}
   service_id: apm
-    
+
 #Deployment
 deploy:
   #schema: deploy.json
