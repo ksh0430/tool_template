@@ -2,9 +2,10 @@
 stages:
 - name: Build
   inputs:
-  - service:${SERVICE_API_REPO}
+  - service: ${SERVICE_API_REPO}
     type: git
     branch: master
+    token: bogus
   jobs:
   - name: Package-api-gateway
     type: builder

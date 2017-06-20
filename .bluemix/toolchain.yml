@@ -4,21 +4,13 @@ deploy:
     prod-region: '{{region}}'
     prod-space: '{{space}}'
   service-category: pipeline
-description: PoC2_petclinic_microservice_jgkong_v4
+description: PoC2_petclinic_microservice_jgkong_v8
 name: PoC2_petclinic_microservice_jgkong
 service_apm:
   parameters: {}
   service_id: apm
 service_draservicebroker:
-  parameters:
-    cf_controller: https://api.ng.bluemix.net
-    dashboard_url: https://console.bluemix.net/devops/insights/#!/overview?env_id=ibm:yp:us-south&orgId=9194ed73-03e2-4d08-8f13-e515844e7205&toolchainId=85559b6d-3b47-4c86-88b5-a3688e68285b
-    dlms_server: https://dlms.ng.bluemix.net
-    dra_server: https://dra.ng.bluemix.net
-    is_developer_insights_enabled: false
-    success:
-      dashboard_url: https://console.bluemix.net/devops/insights/#!/overview?env_id=ibm:yp:us-south&orgId=9194ed73-03e2-4d08-8f13-e515844e7205&toolchainId=85559b6d-3b47-4c86-88b5-a3688e68285b
-    type: default
+  parameters: {}
   service_id: draservicebroker
 service_github_roadmap:
   parameters:
@@ -65,21 +57,10 @@ service_github_spring-petclinic-microservices:
     type: new
   service_id: githubpublic
 service_nexus:
-  parameters:
-    dashboard_url: http://169.54.208.76:28081/nexus/
-    label: Nexus dal01
-    mirror_url: http://169.54.208.76:28081/nexus/content/repositories/central/
-    name: Nexus dal01
-    release_url: http://169.54.208.76:28081/nexus/content/repositories/releases/
-    snapshot_url: ''
-    type: npm
-    user_id: ''
+  parameters: {}
   service_id: nexus
 service_orion:
-  parameters:
-    container_url: ''
-    dashboard_url: /devops/code/edit/edit.html#,toolchain=85559b6d-3b47-4c86-88b5-a3688e68285b
-    toolchain_id: 85559b6d-3b47-4c86-88b5-a3688e68285b
+  parameters: {}
   service_id: orion
 service_pipeline_PoC2-api-gateway-jgkong:
   parameters:
@@ -90,22 +71,16 @@ service_pipeline_PoC2-api-gateway-jgkong:
         PROD_ORG_NAME: '{{deploy.parameters.prod-organization}}'
         PROD_REGION_ID: '{{deploy.parameters.prod-region}}'
         PROD_SPACE_NAME: '{{deploy.parameters.prod-space}}'
-        SERVICE_API_REPO: ''
+        SERVICE_API_REPO: service_github_spring-petclinic-microservices
     name: PoC2-api-gateway-jgkong
-    services: ''
+    services:
+    - service_github_spring-petclinic-microservices
   service_id: pipeline
 service_saucelabs:
-  parameters:
-    key: 1234
-    label: sdevopsadm
-    username: sdevopsadm
+  parameters: {}
   service_id: saucelabs
 service_slack:
-  parameters:
-    api_token: ' https://hooks.slack.com/services/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'
-    channel_name: devops-pipeline
-    label: '#devops-pipeline'
-    team_url: secvdi
+  parameters: {}
   service_id: slack
 version: '0.1'
 
