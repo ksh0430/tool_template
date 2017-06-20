@@ -40,16 +40,16 @@ def main():
                     }
                 }
                 v['parameters'] = newparams
-                newdoc['service_pipeline_{}'.format(v['parameters']['name'], i)] = v
+                service_name = 'service_pipeline_{}'.format(v['parameters']['name'])
             elif service_id == 'githubpublic':
-                service_name = 'service_github_{}'.format(v['parameters']['repo_name'], i)
-                newdoc[service_name] = v
+                service_name = 'service_github_{}'.format(v['parameters']['repo_name'])
                 if not repo_service:
                     repo_service = service_name
             else:
-                newdoc['service_{}'.format(v['service_id'], i)] = v
+                service_name = 'service_{}'.format(v['service_id'])
         else:
-            newdoc[k] = v
+            service_name = k
+        newdoc[service_name] = v
 
     print yaml.dump(newdoc, default_flow_style=False)
 
