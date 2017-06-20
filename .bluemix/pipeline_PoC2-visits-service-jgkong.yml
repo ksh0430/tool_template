@@ -1,0 +1,621 @@
+hooks:
+- enabled: true
+  label: null
+  ssl_enabled: false
+  url: https://devops-api.ng.bluemix.net/v1/messaging/webhook/publish
+stages:
+- inputs:
+  - branch: master
+    dir_name: null
+    service: service_github_spring-petclinic-microservices
+    type: git
+  jobs:
+  - artifact_dir: target
+    build_type: maven
+    name: Build
+    script: '#!/bin/bash
+
+
+      export JAVA_HOME=$JAVA8_HOME
+
+      mvn -B package
+
+
+      cp ./src/main/docker/Dockerfile $ARCHIVE_DIR'
+    type: builder
+    working_dir: spring-petclinic-visits-service
+  name: Build
+- inputs:
+  - dir_name: null
+    job: Build
+    stage: Build
+    type: job
+  jobs:
+  - ADDITIONAL_LIFE_CYCLE_STAGE_SELECT: none
+    COMMAND: '#!/bin/bash'
+    LIFE_CYCLE_STAGE_SELECT: unittest
+    LOG_FILE: surefire-reports/TEST-*.xml
+    enable_tests: true
+    extension_id: ibm.devops.services.pipeline.dra_upload_results
+    name: Unit test
+    test_file_pattern: surefire-reports/TEST-*.xml
+    type: tester
+  - CRITERIA: Staging
+    ENVIRONMENT: STAGING
+    enable_tests: true
+    extension_id: ibm.devops.services.pipeline.dra_devops_gate
+    name: Unit test Gate
+    test_file_pattern: tests/TEST-*.xml
+    type: tester
+  - enable_tests: true
+    name: Static Analysis
+    script: '#!/bin/bash
+
+
+      CLASS=org.springframework.samples.petclinic
+
+      TARGET=spring-petclinic-visits-service-1.5.2.war
+
+
+      git clone https://github.com/jgkong/findbugs_extension.git
+
+
+      export JAVA_HOME=$JAVA8_HOME
+
+      export PATH=$JAVA_HOME/bin:$PATH
+
+
+      export EXT_DIR=$(pwd)/findbugs_extension
+
+
+      FINDBUGS_TGZ=$EXT_DIR/lib/findbugs-noUpdateChecks-3.0.1.tar.gz
+
+      FINDBUGS_PREFIX=''findbugs''
+
+      FINDBUGS_XML=''findbugs_report.xml''
+
+      mkdir -p $FINDBUGS_PREFIX
+
+      tar xz -C $FINDBUGS_PREFIX -f $FINDBUGS_TGZ
+
+      FINDBUGS_DIR=$(pwd)/$(ls -d $FINDBUGS_PREFIX/findbugs*)
+
+
+      $FINDBUGS_DIR/bin/findbugs -xml:withMessages -output $FINDBUGS_XML -onlyAnalyze
+      ${CLASS}.- ${TARGET}
+
+      mkdir -p tests
+
+      python $EXT_DIR/findbug_to_junit.py $FINDBUGS_XML tests/TEST-findbugs.xml'
+    test_file_pattern: tests/TEST-*.xml
+    type: tester
+  name: Test
+  properties:
+  - name: LOGICAL_ENV_NAME
+    type: text
+    value: STAGING
+  - name: LOGICAL_APP_NAME
+    type: text
+    value: visits-service
+  triggers:
+  - type: stage
+- inputs:
+  - dir_name: null
+    job: Build
+    stage: Build
+    type: job
+  jobs:
+  - name: Deploy
+    script: '#!/bin/bash
+
+      cf push "${CF_APP}" -p spring-petclinic-*.war
+
+      '
+    target:
+      application: PoC2-visits-service-jgkong
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: dev
+    type: deployer
+  name: 'DEV: Deploy to Bluemix CF'
+  triggers:
+  - type: stage
+- inputs:
+  - dir_name: null
+    job: Build
+    stage: Build
+    type: job
+  jobs:
+  - COMMAND: "#!/bin/bash\n\n# PoC Code\n#ARTIFACT_NAME=$(ls *.jar)\nARTIFACT_NAME=$(ls\
+      \ spring-petclinic-*.war)\n\n# The following colors have been defined to help\
+      \ with presentation of logs: green, red, label_color, no_color.  \nlog_and_echo\
+      \ \"$LABEL\" \"Starting build script\"\n\n# The IBM Container BM Containers\
+      \ plug-in (cf ic), Git client (git), and IDS Inventory CLI (ids-inv) have been\
+      \ installed.\n# Based on the organization and space selected in the Job credentials\
+      \ are in place for both IBM Container Service and IBM Bluemix \n#####################\n\
+      # Run unit tests    #\n#####################\nlog_and_echo \"$LABEL\" \"No unit\
+      \ tests cases have been checked in\"\n\n######################################\n\
+      # Build Container via Dockerfile     #\n######################################\n\
+      \n# REGISTRY_URL=${CCS_REGISTRY_HOST}/${NAMESPACE}\n# FULL_REPOSITORY_NAME=${REGISTRY_URL}/${IMAGE_NAME}:${APPLICATION_VERSION}\n\
+      # If you wish to receive slack notifications, set SLACK_WEBHOOK_PATH as a property\
+      \ on the stage.\n\nif [ -f Dockerfile ]; then \n    log_and_echo \"$LABEL\"\
+      \ \"Building ${FULL_REPOSITORY_NAME}\"\n    ${EXT_DIR}/utilities/sendMessage.sh\
+      \ -l info -m \"New container build requested for ${FULL_REPOSITORY_NAME}\"\n\
+      \    # build image\n    BUILD_COMMAND=\"\"\n    if [ \"${USE_CACHED_LAYERS}\"\
+      \ == \"true\" ]; then \n        #PoC Code\n        #BUILD_COMMAND=\"build --pull\
+      \ --tag ${FULL_REPOSITORY_NAME} ${WORKSPACE}\"\n        BUILD_COMMAND=\"build\
+      \ --build-arg ARTIFACT_NAME=${ARTIFACT_NAME%.jar} --pull --tag ${FULL_REPOSITORY_NAME}\
+      \ ${WORKSPACE}\"\n        ice_retry ${BUILD_COMMAND}\n        RESULT=$?\n  \
+      \  else \n        #PoC Code\n        #BUILD_COMMAND=\"build --no-cache --tag\
+      \ ${FULL_REPOSITORY_NAME} ${WORKSPACE}\"\n        BUILD_COMMAND=\"build --build-arg\
+      \ ARTIFACT_NAME=${ARTIFACT_NAME%.jar} --no-cache --tag ${FULL_REPOSITORY_NAME}\
+      \ ${WORKSPACE}\"\n        ice_retry ${BUILD_COMMAND}\n        RESULT=$?\n  \
+      \  fi \n\n    if [ $RESULT -ne 0 ]; then\n        log_and_echo \"$ERROR\" \"\
+      Error building image\"\n        ice_retry info \n        ice_retry images\n\
+      \        ${EXT_DIR}/print_help.sh\n        ${EXT_DIR}/utilities/sendMessage.sh\
+      \ -l bad -m \"Container build of ${FULL_REPOSITORY_NAME} failed. $(get_error_info)\"\
+      \n        exit 1\n    else\n        log_and_echo \"$SUCCESSFUL\" \"Container\
+      \ build of ${FULL_REPOSITORY_NAME} was successful\"\n        ${EXT_DIR}/utilities/sendMessage.sh\
+      \ -l good -m \"Container build of ${FULL_REPOSITORY_NAME} was successful\"\n\
+      \    fi  \nelse \n    log_and_echo \"$ERROR\" \"Dockerfile not found in project\"\
+      \n    ${EXT_DIR}/utilities/sendMessage.sh -l bad -m \"Failed to get Dockerfile.\
+      \ $(get_error_info)\"\n    exit 1\nfi  \n\n######################################################################################\n\
+      # Copy any artifacts that will be needed for deployment and testing to $WORKSPACE\
+      \    #\n######################################################################################\n\
+      echo \"IMAGE_NAME=${FULL_REPOSITORY_NAME}\" >> $ARCHIVE_DIR/build.properties"
+    IMAGE_NAME: image-spring-petclinic-visits-service
+    USE_CACHED_LAYERS: 'true'
+    extension_id: ibm.devops.services.pipeline.container.builder
+    name: Build
+    target:
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: test
+    type: builder
+  name: 'TEST: Build container image'
+  triggers:
+  - type: stage
+- inputs:
+  - dir_name: null
+    job: Build
+    stage: 'TEST: Build container image'
+    type: job
+  jobs:
+  - COMMAND: '#!/bin/bash
+
+
+      # Make install file
+
+      cat <<SETUP_EOF>install_tools.sh
+
+      ${INSTALL_COMMAND}
+
+      SETUP_EOF
+
+
+      # Install tools
+
+      chmod +x install_tools.sh
+
+      ./install_tools.sh
+
+
+      # Make playbook file
+
+      cat <<PLAYBOOK_EOF>.playbook.yml
+
+      ${PLAYBOOK_YML}
+
+      PLAYBOOK_EOF
+
+
+
+      # Run Ansible Playbook
+
+      ansible-playbook -vvv --module-path=./BluemixAwsECS/library/ .playbook.yml
+
+
+      '
+    CONTAINER_NAME: myApplicationName
+    DEPLOY_TYPE: red_black
+    PORT: '80'
+    extension_id: ibm.devops.services.pipeline.docker.deploy.ice
+    name: '[PH] Deploy to ECS'
+    target:
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: test
+    type: deployer
+  name: 'TEST: Deploy to AWS ECS'
+  properties:
+  - name: AWS_ACCESS_KEY_ID
+    type: secure
+  - name: AWS_SECRET_ACCESS_KEY
+    type: secure
+  - name: AWS_DEFAULT_REGION
+    type: text
+    value: ap-southeast-2
+  - name: CLUSTER_NAME
+    type: text
+    value: DevOps-PoC2
+  - name: TASK_DEFINITION
+    type: text
+    value: DevOps-PoC2-visits-service
+  - name: INSTALL_COMMAND
+    type: text_area
+    value: '#!/bin/bash
+
+      git clone -b master https://github.com/INFRASOFT-Bluemix/BluemixAwsECS.git
+
+      sudo apt-get -qq update
+
+      sudo apt-get -qq -y install python-dev libssl-dev libffi-dev
+
+      sudo pip install pycrypto pyyaml boto boto3 ansible --quiet
+
+      sudo apt-get -qq clean'
+  - name: PLAYBOOK_YML
+    type: text_area
+    value: "# Publish this application to bluemix using ansible\n---\n- name: Publish\
+      \ the app to AWS ECS\n  hosts: localhost\n  connection: local\n  vars:\n   \
+      \ cluster_name: \"{{ lookup('env', 'CLUSTER_NAME') | default('DevOps-PoC2',\
+      \ true) }}\"\n    td_name: \"{{ lookup('env', 'TASK_DEFINITION') | default('DevOps-PoC2-visits-service',\
+      \ true) }}\"\n\n  tasks:\n    - name: Revision Task Definition\n      revision_task_definition:\n\
+      \      register: task_definition_output\n\n    - name: Stop task\n      stop_ecs_task:\n\
+      \      register: task_stop_output\n\n    - name: Run task\n      ecs_task:\n\
+      \        operation: run\n        cluster: \"{{ cluster_name }}\"\n        task_definition:\
+      \ \"{{ td_name }}\"\n        count: 1\n        started_by: ansible_user\n  \
+      \    register: task_output"
+  triggers:
+  - type: stage
+- inputs:
+  - dir_name: null
+    job: Build
+    stage: 'TEST: Build container image'
+    type: job
+  jobs:
+  - COMMAND: "#!/bin/bash\n# The following are some example deployment scripts.  Use\
+      \ these as is or fork them and include your updates here:\necho -e \"${label_color}Starting\
+      \ deployment script${no_color}\"\n\n\n# To view/fork this script goto: https://github.com/Osthanes/deployscripts\n\
+      # git_retry will retry git calls to prevent pipeline failure on temporary github\
+      \ problems\n# the code can be found in git_util.sh at https://github.com/Osthanes/container_deployer\n\
+      git_retry clone https://github.com/sdevopsadm/deployscripts.git deployscripts\n\
+      \n\n# You can deploy your Image as either a single Container or as a Container\
+      \ \n# Group.  A Container Group deploys a number of containers to enhance\n\
+      # scalability or reliability.  By default we will deploy as a single \n# container.\
+      \  To switch to a group deploy, comment out the line below\n# containing deploycontainer.sh\
+      \ and uncomment the line for deploygroup.sh\n\n# Deploy with containers:\n#\
+      \ Optional environment properties (can be set directly in this script, or defined\
+      \ as environment properties):\n#      NAME              Value         Description\n\
+      #   =============      =========     ==============\n#   BIND_TO           \
+      \  String       Specify a Bluemix application name that whose bound services\
+      \ you wish to make available to the container.  By default this is not set.\n\
+      #   CONTAINER_SIZE      String       Specify container size: pico (64), nano\
+      \ (128), micro (256), tiny (512), small (1024), medium (2048),\n#          \
+      \                                                  large (4096), x-large (8192),\
+      \ 2x-large (16384).\n#                                    Default is micro (256).\n\
+      #   CONCURRENT_VERSIONS Number       Number of versions of this container to\
+      \ leave active.  \n#                                    Default is 1\n#\n#/bin/bash\
+      \ deployscripts/deploycontainer.sh\n\n# Deploy Container Group:\n# Optional\
+      \ environment properties (can be set directly in this script, or defined as\
+      \ environment properties):\n#      NAME              Value         Description\n\
+      #   =============      =========     ==============\n#   ROUTE_HOSTNAME    \
+      \  String       Specify the Hostname for the Cloud Foundry Route you wish to\
+      \ assign to this container group.  By default this is not set.\n#   ROUTE_DOMAIN\
+      \        String       Specify domain name for the Cloud Foundry Route you wish\
+      \ to assign to this container group.  By default this is not set.\n#   BIND_TO\
+      \             String       Specify a Bluemix application name that whose bound\
+      \ services you wish to make available to the container.  By default this is\
+      \ not set.\n#   DESIRED_INSTANCES:  Number       Specify the number of instances\
+      \ in the group.  Default value is 1.\n#   AUTO_RECOVERY:      Boolean      Set\
+      \ auto-recovery to true/false.  Default value is false.\n\n#               \
+      \                     Default is false.\n#   CONTAINER_SIZE      String    \
+      \   Specify container size: pico (64), nano (128), micro (256), tiny (512),\
+      \ small (1024), medium (2048),\n#                                          \
+      \                  large (4096), x-large (8192), 2x-large (16384).\n#      \
+      \                              Default is micro (256).\n#   CONCURRENT_VERSIONS\
+      \ Number       Number of versions of this group to leave active.\n#        \
+      \                            Default is 1\n# IF YOU WANT CONTAINER GROUPS ..\
+      \ uncomment the next line, and comment out the previous deployment line (/bin/bash\
+      \ deployscripts/deploygroup.sh)\nexport ROUTE_HOSTNAME=visits-service-container-test1\n\
+      /bin/bash deployscripts/deploygroup.sh\n\nRESULT=$?\n\n# source the deploy property\
+      \ file\nif [ -f \"${DEPLOY_PROPERTY_FILE}\" ]; then\n  source \"$DEPLOY_PROPERTY_FILE\"\
+      \nfi\n\n#########################\n# Environment DETAILS   #\n#########################\n\
+      # The environment has been setup.\n# The Cloud Foundry CLI (cf), IBM Container\
+      \ Service CLI (ice), Git client (git), IDS Inventory CLI (ids-inv) and Python\
+      \ 2.7.3 (python) have been installed.\n# Based on the organization and space\
+      \ selected in the Job credentials are in place for both IBM Container Service\
+      \ and IBM Bluemix\n\n# The following colors have been defined to help with presentation\
+      \ of logs: green, red, label_color, no_color.\nif [ $RESULT -ne 0 ]; then\n\
+      \    echo -e \"${red}Executed failed or had warnings ${no_color}\"\n    ${EXT_DIR}/print_help.sh\n\
+      \    exit $RESULT\nfi\necho -e \"${green}Execution complete${no_label}\""
+    CONTAINER_NAME: spring-petclinic-visits-service-201705
+    DEPLOY_TYPE: red_black
+    PORT: '8081'
+    extension_id: ibm.devops.services.pipeline.docker.deploy.ice
+    name: Deploy to Bluemix container service
+    target:
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: qa
+    type: deployer
+  name: 'STAGE: Deploy to Bluemix Container'
+  properties:
+  - name: CMD
+    type: text
+    value: java -Djava.security.egd=file:/dev/./urandom -jar /app.jar --server.port=8081
+  - name: ROUTE_HOSTNAME
+    type: text
+    value: visits-service-container-test1
+  - name: ROUTE_DOMAIN
+    type: text
+    value: mybluemix.net
+  - name: OPTIONAL_ARGS
+    type: text
+    value: --anti
+  - name: DESIRED_INSTANCES
+    type: text
+    value: '1'
+  triggers:
+  - type: stage
+- inputs:
+  - dir_name: null
+    job: Build
+    stage: Build
+    type: job
+  jobs:
+  - name: '[PH] QA Approval Gate'
+    script: '#!/bin/bash
+
+      # invoke tests here'
+    type: tester
+  - name: '[PH] PM Approval Gate'
+    script: '#!/bin/bash
+
+      # invoke tests here'
+    type: tester
+  - name: '[PH] Deploy to Production'
+    script: '#!/bin/bash
+
+
+      SSH_KEY_FILE="$(mktemp)"
+
+      SSH_OPTIONS="-o PreferredAuthentications=publickey -o StrictHostKeyChecking=no
+      -o UserKnownHostsFile=/dev/null -i $SSH_KEY_FILE"
+
+      SSH_USER="root"
+
+
+      echo "$SSH_KEY" > "$SSH_KEY_FILE"
+
+
+      echo "server: $SERVER"
+
+      scp $SSH_OPTIONS $TARGET $SSH_USER@$SERVER:/tmp/
+
+      echo "eval $REMOTE_COMMAND" | ssh $SSH_OPTIONS $SSH_USER@$SERVER 2>/dev/null
+
+      echo $?
+
+
+      rm "$SSH_KEY_FILE"
+
+
+      '
+    target:
+      application: PoC2-visits-service-jgkong
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: prod
+    type: deployer
+  name: 'PROD: Deploy to Production'
+  properties:
+  - name: SSH_KEY
+    type: text_area
+    value: '-----BEGIN RSA PRIVATE KEY-----
+      -----END RSA PRIVATE KEY-----'
+  - name: TARGET
+    type: text
+    value: spring-petclinic-visits-service-1.5.2.jar
+  - name: SERVER
+    type: text
+    value: visits-service.iscloud.co.kr
+  - name: REMOTE_COMMAND
+    type: text_area
+    value: '/root/poc2/run.sh stop
+
+      rm -f /root/poc2/spring-petclinic-*.jar
+
+      cp /tmp/spring-petclinic-*.jar /root/poc2/
+
+      /root/poc2/run.sh start'
+- inputs:
+  - dir_name: null
+    job: Build
+    stage: Build
+    type: job
+  jobs:
+  - name: Copy
+    script: "#!/bin/bash\n\nREMOTE_DIRECTORY=${REMOTE_DIRECTORY}/${PIPELINE_ID}\n\n\
+      HOST_NAME=`hostname`\necho \"### hostname : ${HOST_NAME}\"\n\n#Check MD5Deep\
+      \ exist.\nsudo apt-get update\nmd5deep -v||sudo apt-get install md5deep\n\n\
+      rm -f checksum.md5\nmd5deep -rl * > checksum.md5\n\nmkdir -p ${JOB_NAME}\ncp\
+      \ -f ${ARTIFACTS} ${JOB_NAME}/${ARTIFACTS}\ncd ${JOB_NAME}\n\nRSA_PRIV=~/.ssh/id_rsa\n\
+      mkdir -p ~/.ssh\nchmod 700 ~/.ssh\n\necho \"${secdeploy}\" > ${RSA_PRIV}\nchmod\
+      \ 600 ${RSA_PRIV}\n\nRESULTS=$(ssh -vv -i ${RSA_PRIV} -o UserKnownHostsFile=/dev/null\
+      \ -o StrictHostKeyChecking=no -o LogLevel=quiet -l ${DEPLOY_USER} ${DEPLOY_SERVER}\
+      \ REMOTE_DIRECTORY=$REMOTE_DIRECTORY PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV\
+      \ 'bash -s' <<'ENDSSH'\n\nif [ ! -d /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\
+      \ ]; then\nmkdir -p /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\ncase $?\
+      \ in\n0)\n#echo \" * SEC - Remote Directory Creation : OK \"\necho 0\n;;\n*)\n\
+      echo \" * SEC - Remote Directory Creation : Failed \"\nexit 1\n;;\nesac\nelse\n\
+      #echo \" * SEC - Revision Directory Already exist \"\necho 2\nfi\n\nENDSSH)\n\
+      \n# mkdir result (0: sucess, 1: fail, 2: alreay exist)\ncase $RESULTS in\n0)\n\
+      \        echo \" * SEC - Remote Directory Creation : OK \"        \n;;\n2)\n\
+      \        echo \" * SEC - Revision Directory Already exist \"\n        exit 0\n\
+      ;;\n*)\n        echo \" * SEC - Remote Directory Creation : Failed \"\n    \
+      \    exit 1\n;;\nesac\n\necho \"### execute scp :\"\n\nscp -i ${RSA_PRIV} -o\
+      \ StrictHostKeyChecking=no -r ./ ${DEPLOY_USER}@${DEPLOY_SERVER}:/${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}/\n\
+      \ncase $? in\n0)\n        echo \" * SEC - SSH Push : OK \"\n;;\n*)\n       \
+      \ echo \" * SEC - SSH Push : Failed \"\n\t\texit 1\n;;\nesac\n\nssh -i ${RSA_PRIV}\
+      \ -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=quiet\
+      \ -l ${DEPLOY_USER} ${DEPLOY_SERVER} REMOTE_DIRECTORY=$REMOTE_DIRECTORY PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV\
+      \ 'bash -s' <<'ENDSSH'\n\necho \"### remote path : /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\"\
+      \n\ncd /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\nHOST_NAME=`hostname`\n\
+      echo \"### hostname : ${HOST_NAME}\"\n\n#Check MD5Deep exist.\nmd5deep -v||sudo\
+      \ apt-get install md5deep\nrm -f checksum.md5\nmd5deep -rl * > checksum.md5\n\
+      \nENDSSH\n\n\nssh -i ${RSA_PRIV} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no\
+      \ -o LogLevel=quiet -l ${DEPLOY_USER} ${DEPLOY_SERVER} REMOTE_DIRECTORY=$REMOTE_DIRECTORY\
+      \ PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV 'bash -s' <<'ENDSSH'\n\n\
+      echo \"### remote path : /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\"\n\
+      \ncd /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\n\necho \"### remote target\
+      \ : /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\"\necho \"### remote flist\
+      \ :\"\nls -altr\n\necho \" * SEC - Hash Check Start ... \"\nmd5sum -c checksum.md5\n\
+      case $? in\n\t\t0)\n\t\techo \" * SEC - Hash Check Result  : OK \"\n\t\t;;\n\
+      \t\t*)\n\t\techo \" * SEC - Hash Check Result : Fail \"\n\t\texit 1\n\t\t;;\n\
+      esac\n\nENDSSH\n\n"
+    target:
+      application: PoC2-visits-service-jgkong
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: prod
+    type: deployer
+  - name: Move
+    script: "#!/bin/bash\n\nRSA_PRIV=~/.ssh/id_rsa\nmkdir -p ~/.ssh\nchmod 700 ~/.ssh\n\
+      \necho \"${secdeploy}\" > ${RSA_PRIV}\nchmod 600 ${RSA_PRIV}\n\n###################################\n\
+      RESTART=\"RESTART\"\nDEPLOY_ARTIFACTS=\"ROOT.war\"\nREMOTE_DIRECTORY=data/artifacts/${PIPELINE_ID}\n\
+      APP_BASE=\"/data/deploy/${TOMCAT_SERVICE_NAME}-webapps\"\n###################################\n\
+      \nssh -i ${RSA_PRIV} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no\
+      \ -o LogLevel=quiet -l ${DEPLOY_USER} ${DEPLOY_SERVER} JOB_NAME=$JOB_NAME RESTART=$RESTART\
+      \ APP_BASE=$APP_BASE LOG_BASE=$LOG_BASE SERVICE_URL=$SERVICE_URL L7CheckHtml_PATH=$L7CheckHtml_PATH\
+      \ L7CheckHtml_FILE=$L7CheckHtml_FILE REMOTE_DIRECTORY=$REMOTE_DIRECTORY PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV\
+      \ JOB_KEY=$JOB_KEY ARTIFACTS=$ARTIFACTS DEPLOY_ARTIFACTS=$DEPLOY_ARTIFACTS TOMCAT_VERSION=$TOMCAT_VERSION\
+      \ L7CheckEnable=$L7CheckEnable SERVICE_URLCheckEnable=$SERVICE_URLCheckEnable\
+      \ TOMCAT_SERVICE_NAME=$TOMCAT_SERVICE_NAME 'bash -s' <<'ENDSSH'\nexport START_CMD=\"\
+      sudo service ${TOMCAT_VERSION} start\"\nexport STOP_CMD=\"sudo service ${TOMCAT_VERSION}\
+      \ stop\"\n\npwd\n\n#!/bin/sh\n\nIN=${DEPLOY_ARTIFACTS}\n\necho ${IN}\n\narr=$(echo\
+      \ $IN | tr \"/\" \"\\n\")\n\necho ${arr}\n\nfull_file_name=\"\"\n\nfor x in\
+      \ $arr\ndo\n    echo \"> [$x]\"\n    full_file_name=$x\ndone\n\narr=$(echo $full_file_name\
+      \ | tr \".\" \"\\n\")\n\necho $arr\n\ncheck=true\nfile_name=\"\"\nexten=\"\"\
+      \n\nfor x in $arr\ndo\n    if [ $check = true ];then\n       file_name=$x\n\
+      \       check=false\n    else\n       exten=$x\n    fi\ndone\n\necho \"FILE_NAME\
+      \ : $file_name\"\necho \"EXT_NAME  : $exten\"\necho \"FULL_NAME : $full_file_name\"\
+      \n\n if [ \"$RESTART\" = \"STOP\" ] || [ \"$RESTART\" = \"RESTART\" ];then\n\
+      \ \techo \" * SEC - Stop Tomcat Service : Initiated \"\n\t\n\tif [ \"$L7CheckEnable\"\
+      \ = \"true\" ];then\n\t\t# Remove L7 Check Html\n\t\tif [ -e \"${L7CheckHtml_PATH}\"\
+      \"${L7CheckHtml_FILE}\" ];then\n\t\t\tsudo mv $L7CheckHtml_PATH$L7CheckHtml_FILE\
+      \ $L7CheckHtml_PATH$L7CheckHtml_FILE.bak\n\t\t\tcase $? in\n\t\t\t0)\n\t\t\t\
+      echo \" * SEC - Moving $L7CheckHtml_FILE : OK \"\n\t\t\t;;\n\t\t\t*)\n\t\t\t\
+      echo \" * SEC - Moving $L7CheckHtml_FILE : Fail \"\n\t\t\texit 1\n\t\t\t;;\n\
+      \t\t\tesac\n\t\t\tsleep 15\n\t\telse\n\t\t\techo \" * SEC - No $L7CheckHtml_FILE\
+      \ exist \"\n\t\tfi\n\t \n\t\t# Check http access log\n\t\tcurrent_date=`date\
+      \ +\"%Y-%m-%d\"`\n\t\tf_cnt=$(sudo find ${LOG_BASE} -name ${TOMCAT_SERVICE_NAME}_access*\"\
+      ${current_date}\".* | wc -l)\n\t\tif [ f_cnt > 0  ];then\n\t\t\twhile [ true\
+      \ ]\n\t\t\tdo\n\t\t\t\techo \" * SEC - Checking new http access .... \"\n\t\t\
+      \t\taccess1=`sudo sh -c \"cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access*${current_date}.*\
+      \ | grep -v ${L7CheckHtml_FILE} | wc -l\"`\n\t\t\t\techo $access1\n\t\t\t\t\
+      #sleep 15\n\t\t\t\tsleep 3\n\t\t\t\taccess2=`sudo sh -c \"cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access*${current_date}.*\
+      \ | grep -v ${L7CheckHtml_FILE} | wc -l\"`\n\t\t\t\techo $access2\n\t\t\t\t\
+      if [ $access1 -eq $access2 ];then\n\t\t\t\t\techo \" * SEC - No new http access\
+      \ was checked \"\n\t\t\t\tbreak\n\t\t\t\tfi\n\t\t\tdone\n\t\telse\n\t\t\techo\
+      \ \" * SEC - No current access log exist \"\n\t\tfi\n \n\telse\n\t\techo \"\
+      \ * SEC - L7 Check Disabled \"\n\tfi\n\t\n\t# Stop Tomcat Service\n\tsudo service\
+      \ ${TOMCAT_VERSION} stop\n\tcase $? in\n\t\t0)\n\t\techo \" * SEC - Stopping\
+      \ Tomcat service : OK \"\n\t\t;;\n\t\t*)\n\t\techo \" * SEC - Stopping Tomcat\
+      \ service : Fail \"\n\t\texit 1\n\t\t;;\n\t\tesac\n\t\t\n else\n\techo \" *\
+      \ SEC - Stop Tomcat Service : Skipped \"\n fi\n \t\t\n if [ \"$RESTART\" = \"\
+      START\" ] || [ \"$RESTART\" = \"RESTART\" ];then\n\techo \" * SEC - Start Tomcat\
+      \ Service : Initiated \"\n\t# Copy application to Tomcat webapp directory\n\t\
+      cd ${APP_BASE}\n\t\n\tif [ -d \"$file_name\" ];then\n\t\techo \"sudo rm -r $file_name\"\
+      \n\t\tsudo rm -r $file_name\n\tfi\n\t\n\tif [ -f \"$full_file_name\" ];then\n\
+      \t\techo \"sudo rm $full_file_name\"\n\t\tsudo rm $full_file_name\n\tfi\n\t\n\
+      \techo \"sudo mkdir $file_name\"\t\n\tsudo mkdir $file_name\n\n\tsudo cp /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}/$ARTIFACTS\
+      \ ${APP_BASE}/$file_name/$full_file_name\n\n\tcd ${APP_BASE}/$file_name\n\t\
+      sudo jar xvf $full_file_name\n\tsudo rm $full_file_name\n\n\tsudo chown ${TOMCAT_VERSION}.${TOMCAT_VERSION}\
+      \ ${APP_BASE} -R\n\t\n\t# Start Tomcat Service\n\tsudo service ${TOMCAT_VERSION}\
+      \ start\n\tcase $? in\n\t0)\n\t\techo \" * SEC - Tomcat Service Starting : OK\
+      \ \"\n\t;;\n\t*)\n\t\techo \" * SEC - System Staging : Failed \"\n\t\texit 1\n\
+      \t;;\n\tesac\n\t\n\t# Check Business URL \n\tif [ \"$SERVICE_URLCheckEnable\"\
+      \ = \"true\" ];then\n\t    echo \" * SEC - Checking $SERVICE_URL ... \"\n\t\
+      \    count=300\n        until [ \"$count\" -eq 0 ];\n\t    do code=$(curl -sL\
+      \ -k -w \"%{http_code}\\\\n\" \"$SERVICE_URL\" -o /dev/null)\n\t\t    echo \"\
+      \ * SEC - Found code $code\"\n\t\t    if [ \"x$code\" = \"x200\" ]; then \n\t\
+      \t\t    echo \" * SEC - $SERVICE_URL is ready to Service \"\n\t\t        break\n\
+      \t\t    fi\n\t        sleep 1\n            count=$((count-1))\n\t    done\n\
+      \        if [ \"$count\" -eq 0 ]; then\n            echo \" * SEC - Busines\
+      \ URL Check Failed 300 times\"\n            exit 1\n        fi\n\telse\n\t\t\
+      echo \" * SEC - Business URL Check Skipped \"\n\tfi\n\t\n \t# Check L7 Check\
+      \ Html\n\tif [ \"$L7CheckEnable\" = \"true\" ];then\n\t\tif [ -e \"${L7CheckHtml_PATH}\"\
+      \"${L7CheckHtml_FILE}\"\".bak\" ];then\n\t\t\tsudo mv $L7CheckHtml_PATH$L7CheckHtml_FILE.bak\
+      \ $L7CheckHtml_PATH$L7CheckHtml_FILE\n\t\telse\n\t\t\t# Create L7 Check Html\n\
+      \t\t\tsudo mkdir $L7CheckHtml_PATH\n\t\t\tsudo touch $L7CheckHtml_PATH$L7CheckHtml_FILE\n\
+      \t\t\tsudo chown ${TOMCAT_VERSION}.${TOMCAT_VERSION} $L7CheckHtml_PATH -R\n\t\
+      \t\tcase $? in\n\t\t\t0)\n\t\t\techo \" * SEC - $(ls -la ${L7CheckHtml_PATH}${L7CheckHtml_FILE})\
+      \ Creation : OK \"\n\t\t\t;;\n\t\t\t*)\n\t\t\techo \" * SEC - $L7CheckHtml_FILE\
+      \ Creation : Fail \"\n\t\t\texit 1\n\t\t\t;;\n\t\tesac\n\t\tfi\n\t\n\t\tsleep\
+      \ 3\n \n\t\t# Check New HTTP Access \n\t\tif [ -e ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access.\"\
+      ${current_date}\".log ];then\n\t\t\techo \" * SEC - Checking new http access\
+      \ .... \"\n\t\t\taccess1=`sudo sh -c 'cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access.${current_date}.log\
+      \ | grep -v \"${L7CheckHtml_FILE} HTTP/1.1\\\" 200 -\" | wc -l'`\n\t\t\techo\
+      \ $access1\n\t\t\techo \" * SEC - Sleep 3 Sec \"\n\t\t\tsleep 3\n\t\t\taccess2=`sudo\
+      \ sh -c 'cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access.${current_date}.log |\
+      \ grep -v \"${L7CheckHtml_FILE} HTTP/1.1\\\" 200 -\" | wc -l'`\n\t\t\techo $access2\n\
+      \t\t\tif [ $access1 -eq $access2 ];then\n\t\t\t\techo \" * SEC - No new http\
+      \ access was checked \"\n\t\t\telse \n\t\t\t\techo \" * SEC - New http access\
+      \ was checked \"\n\t\t\tfi\t\n\t\telse\n\t\t\techo \" * SEC - No current access\
+      \ log exist \"\n\t\tfi\n\t\n\telse\n\t\techo \" * SEC - Access Log Check Skipped\
+      \ \"\n\tfi\n \n else\n\techo \" * SEC - Start Tomcat Service : Skipped \"\n\
+      \ fi\n\n #if [ \"$RESTART\" = \"PUSH\" ] || [ \"$RESTART\" = \"STOP\" ] ;then\
+      \ \n#\tcd ~/${REMOTE_DIRECTORY}\n# \techo \" * SEC - Pushed file is/are located\
+      \ in $(pwd) \"\n# \telse\n# \techo \" * SEC - Pushed file is/are deployed in\
+      \ ${APP_BASE} \"\n# fi\n\n# Deployed File List\n#       echo \" * SEC - Deployed\
+      \ Flie List - Start  \"\n#\tls -Rla ${APP_BASE}\n#       echo \" * SEC - Deployed\
+      \ Flie List - End\"\n  \nexit 0\n\nENDSSH\n"
+    target:
+      application: PoC2-visits-service-jgkong
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: prod
+    type: deployer
+  name: 'PROD: Deploy (w/o extension)'
+  properties:
+  - name: secdeploy
+    type: text_area
+    value: '-----BEGIN RSA PRIVATE KEY-----
+      -----END RSA PRIVATE KEY-----'
+  - name: ARTIFACTS
+    type: text
+    value: spring-petclinic-visits-service-1.5.2.war
+  - name: DEPLOY_SERVER
+    type: text
+    value: visits-service.iscloud.co.kr
+  - name: DEPLOY_USER
+    type: text
+    value: deploy
+  - name: REMOTE_DIRECTORY
+    type: text
+    value: data/artifacts
+  - name: TOMCAT_VERSION
+    type: text
+    value: tomcat8
+  - name: L7CheckEnable
+    type: text
+    value: 'true'
+  - name: L7CheckHtml_PATH
+    type: text
+    value: /data/deploy/webapps/alive/
+  - name: L7CheckHtml_FILE
+    type: text
+    value: L7check.html
+  - name: LOG_BASE
+    type: text
+    value: /data/deploy/logs/
+  - name: TOMCAT_SERVICE_NAME
+    type: text
+    value: visits-service
+  - name: SERVICE_URLCheckEnable
+    type: text
+    value: 'true'
+  - name: SERVICE_URL
+    type: text
+    value: http://visits-service.iscloud.co.kr:8081/#!/welcome

@@ -1,148 +1,187 @@
----
+hooks:
+- enabled: true
+  label: null
+  ssl_enabled: false
+  url: https://devops-api.ng.bluemix.net/v1/messaging/webhook/publish
 stages:
-- name: Build
-  inputs:
-  - service: ${SERVICE_API_REPO}
+- inputs:
+  - branch: master
+    dir_name: null
+    service: service_github_spring-petclinic-microservices
     type: git
-    branch: master
-    token: bogus
   jobs:
-  - name: Package-api-gateway
-    type: builder
-    working_dir: spring-petclinic-api-gateway
-    artifact_dir: target
+  - artifact_dir: target
     build_type: maven
-    script: |
-      #!/bin/bash
+    name: Package-customers-service
+    script: '#!/bin/bash
+
 
       export JAVA_HOME=$JAVA8_HOME
+
       mvn -B package
 
-      cp ./src/main/docker/Dockerfile $ARCHIVE_DIR/
-      cp ./src/test/resources/sample.js $ARCHIVE_DIR/
-- name: Test
-  inputs:
-  - type: job
+
+      cp ./src/main/docker/Dockerfile $ARCHIVE_DIR/'
+    type: builder
+    working_dir: spring-petclinic-customers-service
+  name: Build
+- inputs:
+  - dir_name: null
+    job: Package-customers-service
     stage: Build
-    job: Package-api-gateway
-    dir_name: null
-  triggers:
-  - type: stage
-  properties:
-  - name: LOGICAL_ENV_NAME
-    value: STAGING
-    type: text
-  - name: LOGICAL_APP_NAME
-    value: api-gateway
-    type: text
+    type: job
   jobs:
-  - name: Unit test
-    type: tester
+  - ADDITIONAL_LIFE_CYCLE_STAGE_SELECT: none
+    COMMAND: '#!/bin/bash'
+    LIFE_CYCLE_STAGE_SELECT: code
+    LOG_FILE: surefire-reports/TEST-*.xml
     enable_tests: true
-    test_file_pattern: surefire-reports/TEST-*.xml
     extension_id: ibm.devops.services.pipeline.dra_upload_results
-    ADDITIONAL_LIFE_CYCLE_STAGE_SELECT: none
+    name: Code Coverage
+    test_file_pattern: surefire-reports/TEST-*.xml
+    type: tester
+  - ADDITIONAL_LIFE_CYCLE_STAGE_SELECT: none
     COMMAND: '#!/bin/bash'
     LIFE_CYCLE_STAGE_SELECT: unittest
     LOG_FILE: surefire-reports/TEST-*.xml
-  - name: Unit test Gate
-    type: tester
     enable_tests: true
-    test_file_pattern: tests/TEST-*.xml
-    extension_id: ibm.devops.services.pipeline.dra_devops_gate
-    CRITERIA: Staging
-    ENVIRONMENT: STAGING
-  - name: Static Analysis
+    extension_id: ibm.devops.services.pipeline.dra_upload_results
+    name: Unit test
+    test_file_pattern: surefire-reports/TEST-*.xml
     type: tester
-    script: |-
-      #!/bin/bash
+  - CRITERIA: QA gate
+    ENVIRONMENT: STAGING
+    enable_tests: true
+    extension_id: ibm.devops.services.pipeline.dra_devops_gate
+    name: DevOps Insight Gate
+    test_file_pattern: surefire-reports/TEST-*.xml
+    type: tester
+  name: Test
+  properties:
+  - name: LOGICAL_ENV_NAME
+    type: text
+    value: STAGING
+  - name: LOGICAL_APP_NAME
+    type: text
+    value: customers-service
+  triggers:
+  - type: stage
+- inputs:
+  - dir_name: null
+    job: Package-customers-service
+    stage: Build
+    type: job
+  jobs:
+  - ADDITIONAL_LIFE_CYCLE_STAGE_SELECT: none
+    COMMAND: '#!/bin/bash'
+    LIFE_CYCLE_STAGE_SELECT: code
+    LOG_FILE: surefire-reports/TEST-*.xml
+    enable_tests: true
+    extension_id: ibm.devops.services.pipeline.dra_upload_results
+    name: Code Coverage
+    test_file_pattern: surefire-reports/TEST-*.xml
+    type: tester
+  - CRITERIA: Code coverage
+    ENVIRONMENT: STAGING
+    enable_tests: true
+    extension_id: ibm.devops.services.pipeline.dra_devops_gate
+    name: Code Coverage Gate
+    test_file_pattern: tests/TEST-*.xml
+    type: tester
+  - ADDITIONAL_LIFE_CYCLE_STAGE_SELECT: none
+    COMMAND: '#!/bin/bash'
+    LIFE_CYCLE_STAGE_SELECT: unittest
+    LOG_FILE: surefire-reports/TEST-*.xml
+    enable_tests: true
+    extension_id: ibm.devops.services.pipeline.dra_upload_results
+    name: Unit test
+    test_file_pattern: surefire-reports/TEST-*.xml
+    type: tester
+  - CRITERIA: Staging
+    ENVIRONMENT: STAGING
+    enable_tests: true
+    extension_id: ibm.devops.services.pipeline.dra_devops_gate
+    name: Unit test Gate
+    test_file_pattern: tests/TEST-*.xml
+    type: tester
+  - enable_tests: true
+    name: Static Analystics
+    script: '#!/bin/bash
+
 
       CLASS=org.springframework.samples.petclinic
-      TARGET=spring-petclinic-api-gateway-1.5.2.war
+
+      TARGET=spring-petclinic-customers-service-1.5.2.war
+
 
       git clone https://github.com/jgkong/findbugs_extension.git
 
+
       export JAVA_HOME=$JAVA8_HOME
+
       export PATH=$JAVA_HOME/bin:$PATH
+
 
       export EXT_DIR=$(pwd)/findbugs_extension
 
+
       FINDBUGS_TGZ=$EXT_DIR/lib/findbugs-noUpdateChecks-3.0.1.tar.gz
-      FINDBUGS_PREFIX='findbugs'
-      FINDBUGS_XML='findbugs_report.xml'
+
+      FINDBUGS_PREFIX=''findbugs''
+
+      FINDBUGS_XML=''findbugs_report.xml''
+
       mkdir -p $FINDBUGS_PREFIX
+
       tar xz -C $FINDBUGS_PREFIX -f $FINDBUGS_TGZ
+
       FINDBUGS_DIR=$(pwd)/$(ls -d $FINDBUGS_PREFIX/findbugs*)
 
-      $FINDBUGS_DIR/bin/findbugs -xml:withMessages -output $FINDBUGS_XML -onlyAnalyze ${CLASS}.- ${TARGET}
+
+      $FINDBUGS_DIR/bin/findbugs -xml:withMessages -output $FINDBUGS_XML -onlyAnalyze
+      ${CLASS}.- ${TARGET}
+
       mkdir -p tests
-      python $EXT_DIR/findbug_to_junit.py $FINDBUGS_XML tests/TEST-findbugs.xml
-    enable_tests: true
+
+      python $EXT_DIR/findbug_to_junit.py $FINDBUGS_XML tests/TEST-findbugs.xml'
     test_file_pattern: tests/TEST-*.xml
-- name: 'DEV: Deploy to Bluemix CF'
-  inputs:
-  - type: job
-    stage: Build
-    job: Package-api-gateway
-    dir_name: null
-  triggers:
-  - type: stage
+    type: tester
+  name: Test
   properties:
   - name: LOGICAL_ENV_NAME
-    value: DEV
     type: text
-  - name: APP_URL
-    value: http://api-gateway-sp.mybluemix.net/#!/welcome
+    value: STAGING
+  - name: LOGICAL_APP_NAME
     type: text
-  jobs:
-  - name: Deploy
-    type: deployer
-    target:
-      region_id: ibm:yp:us-south
-      organization: VDInfraPOC
-      space: dev
-      application: PoC2-api-gateway-jgkong
-    script: |
-      #!/bin/bash
-      cf push "${CF_APP}" -p spring-petclinic-api-gateway-1.5.2.war
-  - name: UX Test
-    type: tester
-    enable_tests: true
-    test_file_pattern: tests/TEST-*.xml
-    extension_id: ibm.devops.services.pipeline.saucelabs
-    target:
-      region_id: ibm:yp:us-south
-      organization: VDInfraPOC
-      space: POC
-    DL_ASSETS: 'true'
-    USER_ID: sdevopsadm
-    COMMAND: |-
-      #!/bin/bash
-      node -v
-
-      export PATH=/opt/IBM/node-v6.7.0/bin:$PATH
-
-      node -v
-      npm install selenium-webdriver
-      node sample.js
-    SELECT_CMD: custom
-- name: 'TEST: Build container image'
-  inputs:
-  - type: job
-    stage: Build
-    job: Package-api-gateway
-    dir_name: null
+    value: customers-service
   triggers:
   - type: stage
+- inputs:
+  - dir_name: null
+    job: Package-customers-service
+    stage: Build
+    type: job
   jobs:
-  - name: Build
-    type: builder
-    extension_id: ibm.devops.services.pipeline.container.builder
+  - name: Deploy
+    script: '#!/bin/bash
+
+      cf push "${CF_APP}" -p spring-petclinic-*.war'
     target:
-      region_id: ibm:yp:us-south
+      application: PoC2-customers-service-jgkong
       organization: VDInfraPOC
-      space: test
-    COMMAND: "#!/bin/bash\n\n# PoC Code\n#ARTIFACT_NAME=$(ls *.jar)\nARTIFACT_NAME=$(ls\
+      region_id: ibm:yp:us-south
+      space: dev
+    type: deployer
+  name: 'DEV: Deploy to Bluemix CF'
+  triggers:
+  - type: stage
+- inputs:
+  - dir_name: null
+    job: Package-customers-service
+    stage: Build
+    type: job
+  jobs:
+  - COMMAND: "#!/bin/bash\n\n# PoC Code\n#ARTIFACT_NAME=$(ls *.jar)\nARTIFACT_NAME=$(ls\
       \ spring-petclinic-*.war)\n\n# The following colors have been defined to help\
       \ with presentation of logs: green, red, label_color, no_color.  \nlog_and_echo\
       \ \"$LABEL\" \"Starting build script\"\n\n# The IBM Container BM Containers\
@@ -160,158 +199,137 @@ stages:
       \    # build image\n    BUILD_COMMAND=\"\"\n    if [ \"${USE_CACHED_LAYERS}\"\
       \ == \"true\" ]; then \n        #PoC Code\n        #BUILD_COMMAND=\"build --pull\
       \ --tag ${FULL_REPOSITORY_NAME} ${WORKSPACE}\"\n        BUILD_COMMAND=\"build\
-      \ --build-arg ARTIFACT_NAME=${ARTIFACT_NAME} --pull --tag ${FULL_REPOSITORY_NAME}\
+      \ --build-arg ARTIFACT_NAME=${ARTIFACT_NAME%.jar} --pull --tag ${FULL_REPOSITORY_NAME}\
       \ ${WORKSPACE}\"\n        ice_retry ${BUILD_COMMAND}\n        RESULT=$?\n  \
       \  else \n        #PoC Code\n        #BUILD_COMMAND=\"build --no-cache --tag\
       \ ${FULL_REPOSITORY_NAME} ${WORKSPACE}\"\n        BUILD_COMMAND=\"build --build-arg\
-      \ ARTIFACT_NAME=${ARTIFACT_NAME} --no-cache --tag ${FULL_REPOSITORY_NAME} ${WORKSPACE}\"\
-      \n        ice_retry ${BUILD_COMMAND}\n        RESULT=$?\n    fi \n\n    if [\
-      \ $RESULT -ne 0 ]; then\n        log_and_echo \"$ERROR\" \"Error building image\"\
-      \n        ice_retry info \n        ice_retry images\n        ${EXT_DIR}/print_help.sh\n\
-      \        ${EXT_DIR}/utilities/sendMessage.sh -l bad -m \"Container build of\
-      \ ${FULL_REPOSITORY_NAME} failed. $(get_error_info)\"\n        exit 1\n    else\n\
-      \        log_and_echo \"$SUCCESSFUL\" \"Container build of ${FULL_REPOSITORY_NAME}\
-      \ was successful\"\n        ${EXT_DIR}/utilities/sendMessage.sh -l good -m \"\
-      Container build of ${FULL_REPOSITORY_NAME} was successful\"\n    fi  \nelse\
-      \ \n    log_and_echo \"$ERROR\" \"Dockerfile not found in project\"\n    ${EXT_DIR}/utilities/sendMessage.sh\
-      \ -l bad -m \"Failed to get Dockerfile. $(get_error_info)\"\n    exit 1\nfi\
-      \  \n\n######################################################################################\n\
+      \ ARTIFACT_NAME=${ARTIFACT_NAME%.jar} --no-cache --tag ${FULL_REPOSITORY_NAME}\
+      \ ${WORKSPACE}\"\n        ice_retry ${BUILD_COMMAND}\n        RESULT=$?\n  \
+      \  fi \n\n    if [ $RESULT -ne 0 ]; then\n        log_and_echo \"$ERROR\" \"\
+      Error building image\"\n        ice_retry info \n        ice_retry images\n\
+      \        ${EXT_DIR}/print_help.sh\n        ${EXT_DIR}/utilities/sendMessage.sh\
+      \ -l bad -m \"Container build of ${FULL_REPOSITORY_NAME} failed. $(get_error_info)\"\
+      \n        exit 1\n    else\n        log_and_echo \"$SUCCESSFUL\" \"Container\
+      \ build of ${FULL_REPOSITORY_NAME} was successful\"\n        ${EXT_DIR}/utilities/sendMessage.sh\
+      \ -l good -m \"Container build of ${FULL_REPOSITORY_NAME} was successful\"\n\
+      \    fi  \nelse \n    log_and_echo \"$ERROR\" \"Dockerfile not found in project\"\
+      \n    ${EXT_DIR}/utilities/sendMessage.sh -l bad -m \"Failed to get Dockerfile.\
+      \ $(get_error_info)\"\n    exit 1\nfi  \n\n######################################################################################\n\
       # Copy any artifacts that will be needed for deployment and testing to $WORKSPACE\
       \    #\n######################################################################################\n\
       echo \"IMAGE_NAME=${FULL_REPOSITORY_NAME}\" >> $ARCHIVE_DIR/build.properties"
-    IMAGE_NAME: image-spring-petclinic-api-gateway
+    IMAGE_NAME: image-spring-petclinic-customers-service
     USE_CACHED_LAYERS: 'true'
-- name: 'TEST: Deploy to AWS ECS'
-  inputs:
-  - type: job
-    stage: 'TEST: Build container image'
-    job: Build
-    dir_name: null
+    extension_id: ibm.devops.services.pipeline.container.builder
+    name: Build
+    target:
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: test
+    type: builder
+  name: 'TEST: Build container image'
   triggers:
   - type: stage
+- inputs:
+  - dir_name: null
+    job: Build
+    stage: 'TEST: Build container image'
+    type: job
+  jobs:
+  - COMMAND: '#!/bin/bash
+
+
+      # Make install file
+
+      cat <<SETUP_EOF>install_tools.sh
+
+      ${INSTALL_COMMAND}
+
+      SETUP_EOF
+
+
+      # Install tools
+
+      chmod +x install_tools.sh
+
+      ./install_tools.sh
+
+
+      # Make playbook file
+
+      cat <<PLAYBOOK_EOF>.playbook.yml
+
+      ${PLAYBOOK_YML}
+
+      PLAYBOOK_EOF
+
+
+
+      # Run Ansible Playbook
+
+      ansible-playbook -vvv --module-path=./BluemixAwsECS/library/ .playbook.yml
+
+
+      '
+    CONTAINER_NAME: myApplicationName
+    DEPLOY_TYPE: red_black
+    PORT: '80'
+    extension_id: ibm.devops.services.pipeline.docker.deploy.ice
+    name: '[PH] Deploy to ECS'
+    target:
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: test
+    type: deployer
+  name: 'TEST: Deploy to AWS ECS'
   properties:
   - name: AWS_ACCESS_KEY_ID
     type: secure
   - name: AWS_SECRET_ACCESS_KEY
     type: secure
   - name: AWS_DEFAULT_REGION
+    type: text
     value: ap-southeast-2
-    type: text
   - name: CLUSTER_NAME
+    type: text
     value: DevOps-PoC2
-    type: text
   - name: TASK_DEFINITION
-    value: DevOps-PoC2-api-gateway
     type: text
+    value: DevOps-PoC2-customers-service
   - name: INSTALL_COMMAND
-    value: |-
-      #!/bin/bash
+    type: text_area
+    value: '#!/bin/bash
+
       git clone -b master https://github.com/INFRASOFT-Bluemix/BluemixAwsECS.git
+
       sudo apt-get -qq update
+
       sudo apt-get -qq -y install python-dev libssl-dev libffi-dev
+
       sudo pip install pycrypto pyyaml boto boto3 ansible --quiet
-      sudo apt-get -qq clean
-    type: text_area
+
+      sudo apt-get -qq clean'
   - name: PLAYBOOK_YML
-    value: |-
-      # Publish this application to bluemix using ansible
-      ---
-      - name: Publish the app to AWS ECS
-        hosts: localhost
-        connection: local
-        vars:
-          cluster_name: "{{ lookup('env', 'CLUSTER_NAME') | default('DevOps-PoC2', true) }}"
-          td_name: "{{ lookup('env', 'TASK_DEFINITION') | default('DevOps-PoC2-api-gateway', true) }}"
-
-        tasks:
-          - name: Revision Task Definition
-            revision_task_definition:
-            register: task_definition_output
-
-          - name: Stop task
-            stop_ecs_task:
-            register: task_stop_output
-
-          - name: Run task
-            ecs_task:
-              operation: run
-              cluster: "{{ cluster_name }}"
-              task_definition: "{{ td_name }}"
-              count: 1
-              started_by: ansible_user
-            register: task_output
     type: text_area
-  - name: LOGICAL_ENV_NAME
-    value: STAGING
-    type: text
-  jobs:
-  - name: Deploy to ECS
-    type: deployer
-    extension_id: ibm.devops.services.pipeline.docker.deploy.ice
-    target:
-      region_id: ibm:yp:us-south
-      organization: VDInfraPOC
-      space: test
-    COMMAND: |+
-      #!/bin/bash
-
-      # Make install file
-      cat <<SETUP_EOF>install_tools.sh
-      ${INSTALL_COMMAND}
-      SETUP_EOF
-
-      # Install tools
-      chmod +x install_tools.sh
-      ./install_tools.sh
-
-      # Make playbook file
-      cat <<PLAYBOOK_EOF>.playbook.yml
-      ${PLAYBOOK_YML}
-      PLAYBOOK_EOF
-
-
-      # Run Ansible Playbook
-      ansible-playbook -vvv --module-path=./BluemixAwsECS/library/ .playbook.yml
-
-    PORT: '80'
-    CONTAINER_NAME: myApplicationName
-    DEPLOY_TYPE: red_black
-- name: 'STAGE: Deploy to Bluemix Container'
-  inputs:
-  - type: job
-    stage: 'TEST: Build container image'
-    job: Build
-    dir_name: null
+    value: "# Publish this application to bluemix using ansible\n---\n- name: Publish\
+      \ the app to AWS ECS\n  hosts: localhost\n  connection: local\n  vars:\n   \
+      \ cluster_name: \"{{ lookup('env', 'CLUSTER_NAME') | default('DevOps-PoC2',\
+      \ true) }}\"\n    td_name: \"{{ lookup('env', 'TASK_DEFINITION') | default('DevOps-PoC2-customers-service',\
+      \ true) }}\"\n\n  tasks:\n    - name: Revision Task Definition\n      revision_task_definition:\n\
+      \      register: task_definition_output\n\n    - name: Stop task\n      stop_ecs_task:\n\
+      \      register: task_stop_output\n\n    - name: Run task\n      ecs_task:\n\
+      \        operation: run\n        cluster: \"{{ cluster_name }}\"\n        task_definition:\
+      \ \"{{ td_name }}\"\n        count: 1\n        started_by: ansible_user\n  \
+      \    register: task_output"
   triggers:
   - type: stage
-  properties:
-  - name: CMD
-    value: java -Djava.security.egd=file:/dev/./urandom -jar /app.jar --server.port=8081
-    type: text
-  - name: ROUTE_HOSTNAME
-    value: api-gateway-container-test1
-    type: text
-  - name: ROUTE_DOMAIN
-    value: mybluemix.net
-    type: text
-  - name: DESIRED_INSTANCES
-    value: '1'
-    type: text
-  - name: LOGICAL_ENV_NAME
-    value: TEST
-    type: text
-  - name: APP_URL
-    value: http://api-gateway-sp.mybluemix.net/#!/welcome
-    type: text
+- inputs:
+  - dir_name: null
+    job: Build
+    stage: 'TEST: Build container image'
+    type: job
   jobs:
-  - name: Deploy to Bluemix container service
-    type: deployer
-    extension_id: ibm.devops.services.pipeline.docker.deploy.ice
-    target:
-      region_id: ibm:yp:us-south
-      organization: VDInfraPOC
-      space: qa
-    COMMAND: "#!/bin/bash\n# The following are some example deployment scripts.  Use\
+  - COMMAND: "#!/bin/bash\n# The following are some example deployment scripts.  Use\
       \ these as is or fork them and include your updates here:\necho -e \"${label_color}Starting\
       \ deployment script${no_color}\"\n\n\n# To view/fork this script goto: https://github.com/Osthanes/deployscripts\n\
       # git_retry will retry git calls to prevent pipeline failure on temporary github\
@@ -367,275 +385,135 @@ stages:
       \ green, red, label_color, no_color.\nif [ $RESULT -ne 0 ]; then\n    echo -e\
       \ \"${red}Executed failed or had warnings ${no_color}\"\n    ${EXT_DIR}/print_help.sh\n\
       \    exit $RESULT\nfi\necho -e \"${green}Execution complete${no_label}\""
-    PORT: '8081'
-    CONTAINER_NAME: spring-petclinic-api-gateway-201705
+    CONTAINER_NAME: spring-petclinic-customers-service-201705
     DEPLOY_TYPE: red_black
-  - name: '[PH] Functional test'
-    type: tester
-    script: |-
-      #!/bin/bash
-      # invoke tests here
-  - name: UX Test
-    type: tester
-    enable_tests: true
-    test_file_pattern: tests/TEST-*.xml
-    extension_id: ibm.devops.services.pipeline.saucelabs
+    PORT: '8081'
+    extension_id: ibm.devops.services.pipeline.docker.deploy.ice
+    name: Deploy to Bluemix container service
     target:
-      region_id: ibm:yp:us-south
       organization: VDInfraPOC
-      space: POC
-    DL_ASSETS: 'true'
-    USER_ID: sdevopsadm
-    COMMAND: |-
-      #!/bin/bash
-      node sample.js
-    SELECT_CMD: custom
-- name: 'PROD: Deploy to Production'
-  inputs:
-  - type: job
-    stage: Build
-    job: Package-api-gateway
-    dir_name: null
-  properties:
-  - name: SSH_KEY
-    value: |-
-      -----BEGIN RSA PRIVATE KEY-----
-      -----END RSA PRIVATE KEY-----
-    type: text_area
-  - name: TARGET
-    value: spring-petclinic-api-gateway-1.5.2.jar
-    type: text
-  - name: SERVER
-    value: api-gateway.iscloud.co.kr
-    type: text
-  - name: REMOTE_COMMAND
-    value: |-
-      /root/poc2/run.sh stop
-      rm -f /root/poc2/spring-petclinic-*.jar
-      cp /tmp/spring-petclinic-*.jar /root/poc2/
-      /root/poc2/run.sh start
-    type: text_area
-  jobs:
-  - name: QA Approval Gate
-    type: tester
-    script: |
-      API_HOST="http://approval-tool.mybluemix.net/api/v1"
-      BASE_URL="$API_HOST/approvals/$PIPELINE_TOOLCHAIN_ID/$PIPELINE_ID/$PIPELINE_STAGE_ID/$PIPELINE_ARCHIVE_ID"
-
-      APPROVAL_STATUS=$(curl -s ${BASE_URL}/status)
-      case "${APPROVAL_STATUS}" in
-          "none")
-              echo "Register new approval request"
-      curl -s ${BASE_URL} \
-      -X POST \
-      -H "Content-Type:application/json" \
-      -d '
-      {
-        "jobId": "'${IDS_JOB_ID}'",
-        "inputRev": "'${PIPELINE_STAGE_INPUT_REV}'",
-        "toolchainName": "'"${IDS_PROJECT_NAME}"'",
-        "stageName": "'"${IDS_STAGE_NAME}"'",
-        "jobName": "'"${IDS_JOB_NAME}"'"
-      }
-      '
-              exit 1
-              ;;
-          "pending")
-              echo "Approval is pending. Wait for approval."
-              exit 1
-              ;;
-          "rejected")
-              echo "Approval is rejected. Cannot deploy."
-              exit 1
-              ;;
-          "revoked")
-              echo "Approval is revoked. Cannot deploy."
-              exit 1
-              ;;
-          "accepted")
-              echo "Approval is accepted. Keep going.."
-              exit
-              ;;
-          *)
-              echo "Unknonwn approval status: ${APPROVAL_STATUS}"
-              exit 1
-              ;;
-      esac
-
-      exit
-  - name: PM Approval Gate
-    type: tester
-    script: |
-      API_HOST="http://approval-tool.mybluemix.net/api/v1"
-      BASE_URL="$API_HOST/approvals/$PIPELINE_TOOLCHAIN_ID/$PIPELINE_ID/$PIPELINE_STAGE_ID/$PIPELINE_ARCHIVE_ID"
-
-      APPROVAL_STATUS=$(curl -s ${BASE_URL}/status)
-      case "${APPROVAL_STATUS}" in
-          "none")
-              echo "Register new approval request"
-      curl -s ${BASE_URL} \
-      -X POST \
-      -H "Content-Type:application/json" \
-      -d '
-      {
-        "jobId": "'${IDS_JOB_ID}'",
-        "inputRev": "'${PIPELINE_STAGE_INPUT_REV}'",
-        "toolchainName": "'"${IDS_PROJECT_NAME}"'",
-        "stageName": "'"${IDS_STAGE_NAME}"'",
-        "jobName": "'"${IDS_JOB_NAME}"'"
-      }
-      '
-              exit 1
-              ;;
-          "pending")
-              echo "Approval is pending. Wait for approval."
-              exit 1
-              ;;
-          "rejected")
-              echo "Approval is rejected. Cannot deploy."
-              exit 1
-              ;;
-          "revoked")
-              echo "Approval is revoked. Cannot deploy."
-              exit 1
-              ;;
-          "accepted")
-              echo "Approval is accepted. Keep going.."
-              exit
-              ;;
-          *)
-              echo "Unknonwn approval status: ${APPROVAL_STATUS}"
-              exit 1
-              ;;
-      esac
-
-      exit
-  - name: '[PH] Deploy to Production'
+      region_id: ibm:yp:us-south
+      space: qa
     type: deployer
-    target:
-      region_id: ibm:yp:us-south
-      organization: VDInfraPOC
-      space: prod
-      application: PoC2-api-gateway-jgkong
-    script: |+
-      #!/bin/bash
+  name: 'STAGE: Deploy to Bluemix Container'
+  properties:
+  - name: CMD
+    type: text
+    value: java -Djava.security.egd=file:/dev/./urandom -jar /app.jar --server.port=8081
+  - name: ROUTE_HOSTNAME
+    type: text
+    value: customers-service-container-test1
+  - name: ROUTE_DOMAIN
+    type: text
+    value: mybluemix.net
+  - name: OPTIONAL_ARGS
+    type: text
+    value: --anti
+  - name: DESIRED_INSTANCES
+    type: text
+    value: '1'
+  triggers:
+  - type: stage
+- inputs:
+  - branch: master
+    dir_name: null
+    service: service_github_spring-petclinic-microservices
+    type: git
+  jobs:
+  - artifact_dir: target
+    build_type: maven
+    name: Package-customers-service-production
+    script: '#!/bin/bash
+
+
+      export JAVA_HOME=$JAVA8_HOME
+
+      mvn -B package
+
+
+      cp ./src/main/docker/Dockerfile $ARCHIVE_DIR'
+    type: builder
+    working_dir: spring-petclinic-customers-service
+  name: 'PROD: Build for Production'
+- inputs:
+  - dir_name: null
+    job: Package-customers-service-production
+    stage: 'PROD: Build for Production'
+    type: job
+  jobs:
+  - name: '[PH] QA Approval Gate'
+    script: '#!/bin/bash
+
+      # invoke tests here'
+    type: tester
+  - name: '[PH] PM Approval Gate'
+    script: '#!/bin/bash
+
+      # invoke tests here'
+    type: tester
+  - name: '[PH] Deploy to Production'
+    script: '#!/bin/bash
 
 
       SSH_KEY_FILE="$(mktemp)"
-      SSH_OPTIONS="-o PreferredAuthentications=publickey -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i $SSH_KEY_FILE"
+
+      SSH_OPTIONS="-o PreferredAuthentications=publickey -o StrictHostKeyChecking=no
+      -o UserKnownHostsFile=/dev/null -i $SSH_KEY_FILE"
+
       SSH_USER="root"
+
 
       echo "$SSH_KEY" > "$SSH_KEY_FILE"
 
+
       echo "server: $SERVER"
+
       scp $SSH_OPTIONS $TARGET $SSH_USER@$SERVER:/tmp/
+
       echo "eval $REMOTE_COMMAND" | ssh $SSH_OPTIONS $SSH_USER@$SERVER 2>/dev/null
+
       echo $?
+
 
       rm "$SSH_KEY_FILE"
 
-  - name: '[PH] Deploy copy'
+
+
+      '
+    target:
+      application: PoC2-customers-service-jgkong
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: prod
     type: deployer
-    extension_id: ibm.devops.services.consul.test_extension
-    LOGIC_CHECK_URL: https://localhost/login.do
-    DEPLOY_CMD: RESTART
-    JOB_NAME: apps
-    POST_COMMAND: |
-      #!/bin/bash
-      # Post scripts
-    APP_BASE: /data/deploy/webapps
-    TOMCAT_VERSION: tomcat8
-    DEPLOY_USER: secdeploy
-    ARTIFACTS: target/app.war
-    PRIV_KEY: |-
-      -----BEGIN RSA PRIVATE KEY-----
-      -----END RSA PRIVATE KEY-----
-    DEPLOY_SERVER: 192.168.0.1
-    REMOTE_DIRECTORY: home/secdeploy/shared/deploy
-    HEALTH_CHECK_URL: /data/deploy/webapps/alive/L7check.html
-    PRE_COMMAND: |
-      #!/bin/bash
-      # Pre scripts
-    ACTION_TYPE: COPY
-  - name: '[PH] Deploy move'
-    type: deployer
-    extension_id: ibm.devops.services.consul.test_extension
-    LOGIC_CHECK_URL: https://localhost/login.do
-    DEPLOY_CMD: RESTART
-    JOB_NAME: apps
-    POST_COMMAND: |
-      #!/bin/bash
-      # Post scripts
-    APP_BASE: /data/deploy/webapps
-    TOMCAT_VERSION: tomcat8
-    DEPLOY_USER: secdeploy
-    ARTIFACTS: target/app.war
-    PRIV_KEY: |-
-      -----BEGIN RSA PRIVATE KEY-----
-      -----END RSA PRIVATE KEY-----
-    DEPLOY_SERVER: 192.168.0.1
-    REMOTE_DIRECTORY: home/secdeploy/shared/deploy
-    HEALTH_CHECK_URL: /data/deploy/webapps/alive/L7check.html
-    PRE_COMMAND: |
-      #!/bin/bash
-      # Pre scripts
-    ACTION_TYPE: MOVE
-- name: 'PROD: Deploy (w/o extension)'
-  inputs:
-  - type: job
-    stage: Build
-    job: Package-api-gateway
-    dir_name: null
+  name: 'PROD: Deploy to Production'
   properties:
-  - name: secdeploy
-    value: |-
-      -----BEGIN RSA PRIVATE KEY-----
-      -----END RSA PRIVATE KEY-----
+  - name: SSH_KEY
     type: text_area
-  - name: ARTIFACTS
-    value: spring-petclinic-api-gateway-1.5.2.war
+    value: '-----BEGIN RSA PRIVATE KEY-----
+      -----END RSA PRIVATE KEY-----'
+  - name: TARGET
     type: text
-  - name: DEPLOY_SERVER
-    value: api-gateway.iscloud.co.kr
+    value: spring-petclinic-customers-service-1.5.2.jar
+  - name: SERVER
     type: text
-  - name: DEPLOY_USER
-    value: deploy
-    type: text
-  - name: REMOTE_DIRECTORY
-    value: data/artifacts
-    type: text
-  - name: TOMCAT_VERSION
-    value: tomcat8
-    type: text
-  - name: L7CheckEnable
-    value: 'true'
-    type: text
-  - name: L7CheckHtml_PATH
-    value: /data/deploy/webapps/alive/
-    type: text
-  - name: L7CheckHtml_FILE
-    value: L7check.html
-    type: text
-  - name: LOG_BASE
-    value: /data/deploy/logs/
-    type: text
-  - name: TOMCAT_SERVICE_NAME
-    value: api-gateway
-    type: text
-  - name: SERVICE_URLCheckEnable
-    value: 'true'
-    type: text
-  - name: SERVICE_URL
-    value: http://api-gateway.iscloud.co.kr:8081/#!/welcome
-    type: text
+    value: customers-service.iscloud.co.kr
+  - name: REMOTE_COMMAND
+    type: text_area
+    value: '/root/poc2/run.sh stop
+
+      rm -f /root/poc2/spring-petclinic-*.jar
+
+      cp /tmp/spring-petclinic-*.jar /root/poc2/
+
+      /root/poc2/run.sh start'
+- inputs:
+  - dir_name: null
+    job: Package-customers-service
+    stage: Build
+    type: job
   jobs:
   - name: Copy
-    type: deployer
-    target:
-      region_id: ibm:yp:us-south
-      organization: VDInfraPOC
-      space: prod
-      application: PoC2-api-gateway-jgkong
     script: "#!/bin/bash\n\nREMOTE_DIRECTORY=${REMOTE_DIRECTORY}/${PIPELINE_ID}\n\n\
       HOST_NAME=`hostname`\necho \"### hostname : ${HOST_NAME}\"\n\n#Check MD5Deep\
       \ exist.\nsudo apt-get update\nmd5deep -v||sudo apt-get install md5deep\n\n\
@@ -674,13 +552,13 @@ stages:
       case $? in\n\t\t0)\n\t\techo \" * SEC - Hash Check Result  : OK \"\n\t\t;;\n\
       \t\t*)\n\t\techo \" * SEC - Hash Check Result : Fail \"\n\t\texit 1\n\t\t;;\n\
       esac\n\nENDSSH\n\n"
-  - name: Move
-    type: deployer
     target:
-      region_id: ibm:yp:us-south
+      application: PoC2-customers-service-jgkong
       organization: VDInfraPOC
-      space: POC
-      application: PoC2-api-gateway-jgkong
+      region_id: ibm:yp:us-south
+      space: prod
+    type: deployer
+  - name: Move
     script: "#!/bin/bash\n\nRSA_PRIV=~/.ssh/id_rsa\nmkdir -p ~/.ssh\nchmod 700 ~/.ssh\n\
       \necho \"${secdeploy}\" > ${RSA_PRIV}\nchmod 600 ${RSA_PRIV}\n\n###################################\n\
       RESTART=\"RESTART\"\nDEPLOY_ARTIFACTS=\"ROOT.war\"\nREMOTE_DIRECTORY=data/artifacts/${PIPELINE_ID}\n\
@@ -771,8 +649,51 @@ stages:
       \ ${APP_BASE} \"\n# fi\n\n# Deployed File List\n#       echo \" * SEC - Deployed\
       \ Flie List - Start  \"\n#\tls -Rla ${APP_BASE}\n#       echo \" * SEC - Deployed\
       \ Flie List - End\"\n  \nexit 0\n\nENDSSH\n"
-hooks:
-- enabled: true
-  label: null
-  ssl_enabled: false
-  url: https://devops-api.ng.bluemix.net/v1/messaging/webhook/publish
+    target:
+      application: PoC2-customers-service-jgkong
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: prod
+    type: deployer
+  name: 'PROD: Deploy (w/o extension)'
+  properties:
+  - name: secdeploy
+    type: text_area
+    value: '-----BEGIN RSA PRIVATE KEY-----
+      -----END RSA PRIVATE KEY-----'
+  - name: ARTIFACTS
+    type: text
+    value: spring-petclinic-customers-service-1.5.2.war
+  - name: DEPLOY_SERVER
+    type: text
+    value: customers-service.iscloud.co.kr
+  - name: DEPLOY_USER
+    type: text
+    value: deploy
+  - name: REMOTE_DIRECTORY
+    type: text
+    value: data/artifacts
+  - name: TOMCAT_VERSION
+    type: text
+    value: tomcat8
+  - name: L7CheckEnable
+    type: text
+    value: 'true'
+  - name: L7CheckHtml_PATH
+    type: text
+    value: /data/deploy/webapps/alive/
+  - name: L7CheckHtml_FILE
+    type: text
+    value: L7check.html
+  - name: LOG_BASE
+    type: text
+    value: /data/deploy/logs/
+  - name: TOMCAT_SERVICE_NAME
+    type: text
+    value: customers-service
+  - name: SERVICE_URLCheckEnable
+    type: text
+    value: 'true'
+  - name: SERVICE_URL
+    type: text
+    value: http://customers-service.iscloud.co.kr:8081/#!/welcome
