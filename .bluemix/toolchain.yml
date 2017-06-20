@@ -4,7 +4,7 @@ deploy:
     prod-region: '{{region}}'
     prod-space: '{{space}}'
   service-category: pipeline
-description: PoC2_petclinic_microservice_jgkong_v3
+description: PoC2_petclinic_microservice_jgkong_v4
 name: PoC2_petclinic_microservice_jgkong
 service_apm:
   parameters: {}
@@ -92,45 +92,6 @@ service_pipeline_PoC2-api-gateway-jgkong:
         PROD_SPACE_NAME: '{{deploy.parameters.prod-space}}'
         SERVICE_API_REPO: ''
     name: PoC2-api-gateway-jgkong
-    services: ''
-  service_id: pipeline
-service_pipeline_PoC2-customers-service-jgkong:
-  parameters:
-    configuration:
-      content:
-        $text: pipeline_PoC2-customers-service-jgkong.yaml
-      env:
-        PROD_ORG_NAME: '{{deploy.parameters.prod-organization}}'
-        PROD_REGION_ID: '{{deploy.parameters.prod-region}}'
-        PROD_SPACE_NAME: '{{deploy.parameters.prod-space}}'
-        SERVICE_API_REPO: service_github_spring-petclinic-microservices
-    name: PoC2-customers-service-jgkong
-    services: service_github_spring-petclinic-microservices
-  service_id: pipeline
-service_pipeline_PoC2-vets-service-jgkong:
-  parameters:
-    configuration:
-      content:
-        $text: pipeline_PoC2-vets-service-jgkong.yaml
-      env:
-        PROD_ORG_NAME: '{{deploy.parameters.prod-organization}}'
-        PROD_REGION_ID: '{{deploy.parameters.prod-region}}'
-        PROD_SPACE_NAME: '{{deploy.parameters.prod-space}}'
-        SERVICE_API_REPO: service_github_spring-petclinic-microservices
-    name: PoC2-vets-service-jgkong
-    services: service_github_spring-petclinic-microservices
-  service_id: pipeline
-service_pipeline_PoC2-visits-service-jgkong:
-  parameters:
-    configuration:
-      content:
-        $text: pipeline_PoC2-visits-service-jgkong.yaml
-      env:
-        PROD_ORG_NAME: '{{deploy.parameters.prod-organization}}'
-        PROD_REGION_ID: '{{deploy.parameters.prod-region}}'
-        PROD_SPACE_NAME: '{{deploy.parameters.prod-space}}'
-        SERVICE_API_REPO: ''
-    name: PoC2-visits-service-jgkong
     services: ''
   service_id: pipeline
 service_saucelabs:
