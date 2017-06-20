@@ -1,6 +1,10 @@
 deploy:
+  parameters:
+    prod-organization: '{{organization}}'
+    prod-region: '{{region}}'
+    prod-space: '{{space}}'
   service-category: pipeline
-description: PoC2_petclinic_microservice_jgkong
+description: PoC2_petclinic_microservice_jgkong_v2
 name: PoC2_petclinic_microservice_jgkong
 service_apm:
   parameters: {}
