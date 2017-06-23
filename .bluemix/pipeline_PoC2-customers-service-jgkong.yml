@@ -275,7 +275,7 @@ stages:
     DEPLOY_TYPE: red_black
     PORT: '80'
     extension_id: ibm.devops.services.pipeline.docker.deploy.ice
-    name: '[PH] Deploy to ECS'
+    name: Deploy to ECS
     target:
       organization: VDInfraPOC
       region_id: ibm:yp:us-south
@@ -437,85 +437,37 @@ stages:
   name: 'PROD: Build for Production'
 - inputs:
   - dir_name: null
-    job: Package-customers-service-production
-    stage: 'PROD: Build for Production'
-    type: job
-  jobs:
-  - name: '[PH] QA Approval Gate'
-    script: '#!/bin/bash
-
-      # invoke tests here'
-    type: tester
-  - name: '[PH] PM Approval Gate'
-    script: '#!/bin/bash
-
-      # invoke tests here'
-    type: tester
-  - name: '[PH] Deploy to Production'
-    script: '#!/bin/bash
-
-
-      SSH_KEY_FILE="$(mktemp)"
-
-      SSH_OPTIONS="-o PreferredAuthentications=publickey -o StrictHostKeyChecking=no
-      -o UserKnownHostsFile=/dev/null -i $SSH_KEY_FILE"
-
-      SSH_USER="root"
-
-
-      echo "$SSH_KEY" > "$SSH_KEY_FILE"
-
-
-      echo "server: $SERVER"
-
-      scp $SSH_OPTIONS $TARGET $SSH_USER@$SERVER:/tmp/
-
-      echo "eval $REMOTE_COMMAND" | ssh $SSH_OPTIONS $SSH_USER@$SERVER 2>/dev/null
-
-      echo $?
-
-
-      rm "$SSH_KEY_FILE"
-
-
-
-      '
-    target:
-      application: PoC2-customers-service-jgkong
-      organization: VDInfraPOC
-      region_id: ibm:yp:us-south
-      space: prod
-    type: deployer
-  name: 'PROD: Deploy to Production'
-  properties:
-  - name: SSH_KEY
-    type: text_area
-    value: '-----BEGIN RSA PRIVATE KEY-----
-      -----END RSA PRIVATE KEY-----'
-  - name: TARGET
-    type: text
-    value: spring-petclinic-customers-service-1.5.2.jar
-  - name: SERVER
-    type: text
-    value: customers-service.iscloud.co.kr
-  - name: REMOTE_COMMAND
-    type: text_area
-    value: '/root/poc2/run.sh stop
-
-      rm -f /root/poc2/spring-petclinic-*.jar
-
-      cp /tmp/spring-petclinic-*.jar /root/poc2/
-
-      /root/poc2/run.sh start'
-- inputs:
-  - dir_name: null
     job: Package-customers-service
     stage: Build
     type: job
   jobs:
+  - APPROVERS: jgkong@kr.ibm.com
+    extension_id: ibm.devops.services.deployment_center.approval_gate
+    name: QA Approval Gate
+    type: tester
+  - APPROVERS: jgkong@kr.ibm.com
+    extension_id: ibm.devops.services.deployment_center.approval_gate
+    name: PM Approval Gate
+    type: tester
   - name: Copy
-    script: "#!/bin/bash\n\nREMOTE_DIRECTORY=${REMOTE_DIRECTORY}/${PIPELINE_ID}\n\n\
-      HOST_NAME=`hostname`\necho \"### hostname : ${HOST_NAME}\"\n\n#Check MD5Deep\
+    script: "#!/bin/bash\n\n#### <Deployment Center> ####\nAPI_HOST=\"http://approval-tool.mybluemix.net/api/v1\"\
+      \nBASE_URL=\"$API_HOST/deployment/${PIPELINE_ID}\"\n\nURL=\"${BASE_URL}/stages/${PIPELINE_STAGE_ID}/builds/${BUILD_NUMBER}/nodes?service=${SERVICE}\"\
+      \nMETHOD=\"GET\"\n\ncurl -v \"${URL}\" \\\n-X \"${METHOD}\" \\\n-H \"Content-Type:application/json\"\
+      \ > nodes.json\n\necho \"Results\"\ncat nodes.json\n\ngrep -q '{\"result\":\"\
+      Stage data created\"}' nodes.json && {\n  echo \"Stage data created\"\n  exit\
+      \ 1\n}\n\ngrep -q '{\"error\":\"Data not found\"}' nodes.json && {\n  echo \"\
+      Unplanned deployment\"\n  exit 1\n}\n\n\nSERVERS=$(cat nodes.json |python -c\
+      \ \"import sys, json; print ' '.join(map(lambda x: '{}/{}'.format(x['Node'],\
+      \ x['Address']), json.load(sys.stdin)))\")\n\n#echo ${SERVERS}\n\nupdate_status\
+      \ () {\n  NODE_NAME=\"$1\"\n  REVID=\"$2\"\n  STATUS=\"$3\"\n  echo \"$NODE_NAME,\
+      \ $STATUS\"\n  URL=\"${API_HOST}/nodes/${NODE_NAME}\"\n  curl \"${URL}\" \\\n\
+      \    -X PUT \\\n    -H \"Content-Type:application/json\" \\\n    -d \"\n{\n\
+      \  \\\"revisionId\\\": \\\"${REVID}\\\",\n  \\\"status\\\": \\\"${STATUS}\\\"\
+      \n}\n\"\n\n}\n\nfor SERVER in ${SERVERS}; do\n  NODE_NAME=\"${SERVER%/*}\"\n\
+      \  IP=\"${SERVER#*/}\"\n  echo \"Start deploying to: ${NODE_NAME} (${IP})\"\n\
+      \  update_status \"${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\" \"COPY STARTED\"\
+      \n  DEPLOY_SERVER=\"${IP}\"\n#### </Deployment Center> ####\n\nREMOTE_DIRECTORY=${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_JOB_ID}\n\
+      \nHOST_NAME=`hostname`\necho \"### hostname : ${HOST_NAME}\"\n\n#Check MD5Deep\
       \ exist.\nsudo apt-get update\nmd5deep -v||sudo apt-get install md5deep\n\n\
       rm -f checksum.md5\nmd5deep -rl * > checksum.md5\n\nmkdir -p ${JOB_NAME}\ncp\
       \ -f ${ARTIFACTS} ${JOB_NAME}/${ARTIFACTS}\ncd ${JOB_NAME}\n\nRSA_PRIV=~/.ssh/id_rsa\n\
@@ -551,17 +503,36 @@ stages:
       \ :\"\nls -altr\n\necho \" * SEC - Hash Check Start ... \"\nmd5sum -c checksum.md5\n\
       case $? in\n\t\t0)\n\t\techo \" * SEC - Hash Check Result  : OK \"\n\t\t;;\n\
       \t\t*)\n\t\techo \" * SEC - Hash Check Result : Fail \"\n\t\texit 1\n\t\t;;\n\
-      esac\n\nENDSSH\n\n"
+      esac\n\nENDSSH\n\n#### <Deployment Center> ####\n  echo \"Finished deploying\
+      \ to: ${NODE_NAME} (${IP})\"\n  update_status \"${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\"\
+      \ \"COPY FINISHED\"\ndone\n#### </Deployment Center> ####\n"
     target:
       application: PoC2-customers-service-jgkong
       organization: VDInfraPOC
       region_id: ibm:yp:us-south
-      space: prod
+      space: POC
     type: deployer
   - name: Move
-    script: "#!/bin/bash\n\nRSA_PRIV=~/.ssh/id_rsa\nmkdir -p ~/.ssh\nchmod 700 ~/.ssh\n\
-      \necho \"${secdeploy}\" > ${RSA_PRIV}\nchmod 600 ${RSA_PRIV}\n\n###################################\n\
-      RESTART=\"RESTART\"\nDEPLOY_ARTIFACTS=\"ROOT.war\"\nREMOTE_DIRECTORY=data/artifacts/${PIPELINE_ID}\n\
+    script: "#!/bin/bash\n\n#### <Deployment Center> ####\nAPI_HOST=\"http://approval-tool.mybluemix.net/api/v1\"\
+      \nBASE_URL=\"$API_HOST/deployment/${PIPELINE_ID}\"\n\nURL=\"${BASE_URL}/stages/${PIPELINE_STAGE_ID}/builds/${BUILD_NUMBER}/nodes?service=${SERVICE}\"\
+      \nMETHOD=\"GET\"\n\ncurl -v \"${URL}\" \\\n-X \"${METHOD}\" \\\n-H \"Content-Type:application/json\"\
+      \ > nodes.json\n\necho \"Results\"\ncat nodes.json\n\ngrep -q '{\"result\":\"\
+      Stage data created\"}' nodes.json && {\n  echo \"Stage data created\"\n  exit\
+      \ 1\n}\n\ngrep -q '{\"error\":\"Data not found\"}' nodes.json && {\n  echo \"\
+      Unplanned deployment\"\n  exit 1\n}\n\n\nSERVERS=$(cat nodes.json |python -c\
+      \ \"import sys, json; print ' '.join(map(lambda x: '{}/{}'.format(x['Node'],\
+      \ x['Address']), json.load(sys.stdin)))\")\n\n#echo ${SERVERS}\n\nupdate_status\
+      \ () {\n  NODE_NAME=\"$1\"\n  REVID=\"$2\"\n  STATUS=\"$3\"\n  echo \"$NODE_NAME,\
+      \ $STATUS\"\n  URL=\"${API_HOST}/nodes/${NODE_NAME}\"\n  curl \"${URL}\" \\\n\
+      \    -X PUT \\\n    -H \"Content-Type:application/json\" \\\n    -d \"\n{\n\
+      \  \\\"revisionId\\\": \\\"${REVID}\\\",\n  \\\"status\\\": \\\"${STATUS}\\\"\
+      \n}\n\"\n\n}\n\nfor SERVER in ${SERVERS}; do\n  NODE_NAME=\"${SERVER%/*}\"\n\
+      \  IP=\"${SERVER#*/}\"\n  echo \"Start deploying to: ${NODE_NAME} (${IP})\"\n\
+      \  update_status \"${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\" \"MOVE STARTED\"\
+      \n  DEPLOY_SERVER=\"${IP}\"\n#### </Deployment Center> ####\n\nRSA_PRIV=~/.ssh/id_rsa\n\
+      mkdir -p ~/.ssh\nchmod 700 ~/.ssh\n\necho \"${secdeploy}\" > ${RSA_PRIV}\nchmod\
+      \ 600 ${RSA_PRIV}\n\n###################################\nRESTART=\"RESTART\"\
+      \nDEPLOY_ARTIFACTS=\"ROOT.war\"\nREMOTE_DIRECTORY=${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_JOB_ID}\n\
       APP_BASE=\"/data/deploy/${TOMCAT_SERVICE_NAME}-webapps\"\n###################################\n\
       \nssh -i ${RSA_PRIV} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no\
       \ -o LogLevel=quiet -l ${DEPLOY_USER} ${DEPLOY_SERVER} JOB_NAME=$JOB_NAME RESTART=$RESTART\
@@ -648,12 +619,15 @@ stages:
       \ in $(pwd) \"\n# \telse\n# \techo \" * SEC - Pushed file is/are deployed in\
       \ ${APP_BASE} \"\n# fi\n\n# Deployed File List\n#       echo \" * SEC - Deployed\
       \ Flie List - Start  \"\n#\tls -Rla ${APP_BASE}\n#       echo \" * SEC - Deployed\
-      \ Flie List - End\"\n  \nexit 0\n\nENDSSH\n"
+      \ Flie List - End\"\n  \nexit 0\n\nENDSSH\n\n#### <Deployment Center> ####\n\
+      \  echo \"Finished deploying to: ${NODE_NAME} (${IP})\"\n  update_status \"\
+      ${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\" \"MOVE FINISHED\"\ndone\n####\
+      \ </Deployment Center> ####"
     target:
       application: PoC2-customers-service-jgkong
       organization: VDInfraPOC
       region_id: ibm:yp:us-south
-      space: prod
+      space: POC
     type: deployer
   name: 'PROD: Deploy (w/o extension)'
   properties:
@@ -696,4 +670,39 @@ stages:
     value: 'true'
   - name: SERVICE_URL
     type: text
-    value: http://customers-service.iscloud.co.kr:8081/#!/welcome
+    value: http://customers-service.iscloud.co.kr:8082/petTypes
+  - name: SERVICE
+    type: text
+    value: customers-service
+- inputs:
+  - dir_name: null
+    job: Package-customers-service-production
+    stage: 'PROD: Build for Production'
+    type: job
+  jobs:
+  - APPROVERS: jgkong@kr.ibm.com
+    extension_id: ibm.devops.services.deployment_center.approval_gate
+    name: QA Approval Gate
+    type: tester
+  - APPROVERS: jgkong@kr.ibm.com
+    extension_id: ibm.devops.services.deployment_center.approval_gate
+    name: PM Approval Gat
+    type: tester
+  - name: Deploy to Production
+    script: '#!/bin/bash
+
+      '
+    target:
+      application: PoC2-customers-service-jgkong
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: prod
+    type: deployer
+  name: 'PROD: Deploy to Production'
+  properties:
+  - name: TARGET
+    type: text
+    value: spring-petclinic-customers-service-1.5.2.war
+  - name: SERVER
+    type: text
+    value: customers-service.iscloud.co.kr
