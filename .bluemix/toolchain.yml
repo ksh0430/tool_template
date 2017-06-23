@@ -56,9 +56,6 @@ service_github_spring-petclinic-microservices:
     token_url: https://otc-github-public-broker.ng.bluemix.net/github/token
     type: new
   service_id: githubpublic
-service_nexus:
-  parameters: {}
-  service_id: nexus
 service_orion:
   parameters: {}
   service_id: orion
