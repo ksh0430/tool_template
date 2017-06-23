@@ -1,5 +1,5 @@
 # Microservices Toolchain Template
-<a href="https://console.ng.bluemix.net/devops/setup/deploy?repository=https://github.com/sdevopsadm/tool_template/tree/poc2_demo" target="_blank"><img src="http://bluemix.net/deploy/button.png" alt="Deploy to Bluemix"/><a/>
+<a href="https://console.ng.bluemix.net/devops/setup/deploy?repository=https://github.com/sdevopsadm/tool_template&env_id=ibm:yp:us-south&branch=poc2_demo" target="_blank"><img src="http://bluemix.net/deploy/button.png" alt="Deploy to Bluemix"/><a/>
 <br/><br/>
 
 # Monolithic Toolchain Template
