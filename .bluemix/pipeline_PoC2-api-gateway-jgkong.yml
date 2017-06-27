@@ -10,8 +10,16 @@ stages:
     service: service_github_spring-petclinic-microservices
     type: git
   jobs:
+  - CONVENTION_STYLE: google
+    TARGET: spring-petclinic-api-gateway/src
+    enable_tests: true
+    extension_id: ibm.devops.services.deployment_center.checkstyle
+    name: Test
+    test_file_pattern: tests/TEST-checkstyle.xml
+    type: tester
   - artifact_dir: target
     build_type: maven
+    enable_tests: true
     name: Package-api-gateway
     script: '#!/bin/bash
 
@@ -25,10 +33,37 @@ stages:
 
       cp ./src/test/resources/sample.js $ARCHIVE_DIR/
 
-      '
+
+      ls -al target/site/jacoco'
+    test_file_pattern: target/surefire-reports/TEST-*.xml
     type: builder
     working_dir: spring-petclinic-api-gateway
+  - enable_tests: true
+    name: Coding Style
+    script: "#!/bin/bash\n# invoke tests here\n\nexport JAVA_HOME=$JAVA8_HOME\nexport\
+      \ PATH=$JAVA_HOME/bin:$PATH\n\nexport CONVENTION_STYLE=\"google\"\nexport TARGET=\"\
+      spring-petclinic-api-gateway/src\"\n\ngit clone https://github.com/jgkong/checkstyle_extension\n\
+      export EXT_DIR=$(pwd)/checkstyle_extension\n\nCHECKSTYLE_JAR=${EXT_DIR}/lib/checkstyle-7.8.2-all.jar\n\
+      CHECKSTYLE_XML='checkstyle_report.xml'\nJUNIT_XML='tests/TEST-checkstyle.xml'\n\
+      \nshopt -s globstar\njava -jar ${CHECKSTYLE_JAR} \\\n-c /${CONVENTION_STYLE}_checks.xml\
+      \ \\\n-f xml \\\n-o \"${CHECKSTYLE_XML}\" \\\n\"${TARGET}\"/**/*.java\n\nif\
+      \ [ $? -gt 0 ]; then\n    echo \"Error from checkstyle\"\n    exit 1\nfi\n\n\
+      if [ ! -f \"${CHECKSTYLE_XML}\" ]; then\n    echo \"No results from checkstyle\"\
+      \n    exit\nfi\n\nmkdir -p $(dirname ${JUNIT_XML})\npython ${EXT_DIR}/checkstyle_to_junit.py\
+      \ ${CHECKSTYLE_XML} ${JUNIT_XML} $(pwd)\n"
+    test_file_pattern: tests/TEST-checkstyle.xml
+    type: tester
   name: Build
+  properties:
+  - name: LOGICAL_ENV_NAME
+    type: text
+    value: STAGING
+  - name: LOGICAL_APP_NAME
+    type: text
+    value: api-gateway
+  - name: PIPELINE_DEBUG_SCRIPT
+    type: text
+    value: 'true'
 - inputs:
   - dir_name: null
     job: Package-api-gateway
@@ -101,8 +136,6 @@ stages:
   - name: LOGICAL_APP_NAME
     type: text
     value: api-gateway
-  triggers:
-  - type: stage
 - inputs:
   - dir_name: null
     job: Package-api-gateway
@@ -121,8 +154,7 @@ stages:
       region_id: ibm:yp:us-south
       space: dev
     type: deployer
-  - ACCESS: 20660e4c-08db-4680-b22e-4ffbdc0d998c
-    COMMAND: '#!/bin/bash
+  - COMMAND: '#!/bin/bash
 
       node -v
 
@@ -137,14 +169,13 @@ stages:
       node sample.js'
     DL_ASSETS: 'true'
     SELECT_CMD: custom
-    USER_ID: sdevopsadm
     enable_tests: true
     extension_id: ibm.devops.services.pipeline.saucelabs
     name: UX Test
     target:
       organization: VDInfraPOC
       region_id: ibm:yp:us-south
-      space: POC
+      space: dev
     test_file_pattern: tests/TEST-*.xml
     type: tester
   name: 'DEV: Deploy to Bluemix CF'
@@ -385,13 +416,11 @@ stages:
 
       # invoke tests here'
     type: tester
-  - ACCESS: 20660e4c-08db-4680-b22e-4ffbdc0d998c
-    COMMAND: '#!/bin/bash
+  - COMMAND: '#!/bin/bash
 
       node sample.js'
     DL_ASSETS: 'true'
     SELECT_CMD: custom
-    USER_ID: sdevopsadm
     enable_tests: true
     extension_id: ibm.devops.services.pipeline.saucelabs
     name: UX Test
@@ -429,39 +458,267 @@ stages:
     stage: Build
     type: job
   jobs:
-  - name: QA Approval Gate
-    script: "API_HOST=\"http://approval-tool.mybluemix.net/api/v1\"\nBASE_URL=\"$API_HOST/approvals/$PIPELINE_TOOLCHAIN_ID/$PIPELINE_ID/$PIPELINE_STAGE_ID/$PIPELINE_ARCHIVE_ID\"\
-      \n\nAPPROVAL_STATUS=$(curl -s ${BASE_URL}/status)\ncase \"${APPROVAL_STATUS}\"\
-      \ in\n    \"none\")\n        echo \"Register new approval request\"\ncurl -s\
-      \ ${BASE_URL} \\\n-X POST \\\n-H \"Content-Type:application/json\" \\\n-d '\n\
-      {\n  \"jobId\": \"'${IDS_JOB_ID}'\",\n  \"inputRev\": \"'${PIPELINE_STAGE_INPUT_REV}'\"\
-      ,\n  \"toolchainName\": \"'\"${IDS_PROJECT_NAME}\"'\",\n  \"stageName\": \"\
-      '\"${IDS_STAGE_NAME}\"'\",\n  \"jobName\": \"'\"${IDS_JOB_NAME}\"'\"\n}\n'\n\
-      \        exit 1\n        ;;\n    \"pending\")\n        echo \"Approval is pending.\
-      \ Wait for approval.\"\n        exit 1\n        ;;\n    \"rejected\")\n    \
-      \    echo \"Approval is rejected. Cannot deploy.\"\n        exit 1\n       \
-      \ ;;\n    \"revoked\")\n        echo \"Approval is revoked. Cannot deploy.\"\
-      \n        exit 1\n        ;;\n    \"accepted\")\n        echo \"Approval is\
-      \ accepted. Keep going..\"\n        exit\n        ;;\n    *)\n        echo \"\
-      Unknonwn approval status: ${APPROVAL_STATUS}\"\n        exit 1\n        ;;\n\
-      esac\n\nexit\n"
+  - APPROVERS: jgkong@kr.ibm.com
+    extension_id: ibm.devops.services.deployment_center.approval_gate
+    name: Test
     type: tester
-  - name: PM Approval Gate
-    script: "API_HOST=\"http://approval-tool.mybluemix.net/api/v1\"\nBASE_URL=\"$API_HOST/approvals/$PIPELINE_TOOLCHAIN_ID/$PIPELINE_ID/$PIPELINE_STAGE_ID/$PIPELINE_ARCHIVE_ID\"\
-      \n\nAPPROVAL_STATUS=$(curl -s ${BASE_URL}/status)\ncase \"${APPROVAL_STATUS}\"\
-      \ in\n    \"none\")\n        echo \"Register new approval request\"\ncurl -s\
-      \ ${BASE_URL} \\\n-X POST \\\n-H \"Content-Type:application/json\" \\\n-d '\n\
-      {\n  \"jobId\": \"'${IDS_JOB_ID}'\",\n  \"inputRev\": \"'${PIPELINE_STAGE_INPUT_REV}'\"\
-      ,\n  \"toolchainName\": \"'\"${IDS_PROJECT_NAME}\"'\",\n  \"stageName\": \"\
-      '\"${IDS_STAGE_NAME}\"'\",\n  \"jobName\": \"'\"${IDS_JOB_NAME}\"'\"\n}\n'\n\
-      \        exit 1\n        ;;\n    \"pending\")\n        echo \"Approval is pending.\
-      \ Wait for approval.\"\n        exit 1\n        ;;\n    \"rejected\")\n    \
-      \    echo \"Approval is rejected. Cannot deploy.\"\n        exit 1\n       \
-      \ ;;\n    \"revoked\")\n        echo \"Approval is revoked. Cannot deploy.\"\
-      \n        exit 1\n        ;;\n    \"accepted\")\n        echo \"Approval is\
-      \ accepted. Keep going..\"\n        exit\n        ;;\n    *)\n        echo \"\
-      Unknonwn approval status: ${APPROVAL_STATUS}\"\n        exit 1\n        ;;\n\
-      esac\n\nexit\n"
+  - APPROVERS: jgkong@kr.ibm.com
+    extension_id: ibm.devops.services.deployment_center.approval_gate
+    name: QA Approval Gate
+    type: tester
+  - APPROVERS: jgkong@kr.ibm.com
+    extension_id: ibm.devops.services.deployment_center.approval_gate
+    name: PM Approval Gate
+    type: tester
+  - name: Copy
+    script: "#!/bin/bash\n\n#### <Deployment Center> ####\nAPI_HOST=\"http://approval-tool.mybluemix.net/api/v1\"\
+      \nBASE_URL=\"$API_HOST/deployment/${PIPELINE_ID}\"\n\nURL=\"${BASE_URL}/stages/${PIPELINE_STAGE_ID}/builds/${BUILD_NUMBER}/nodes?service=${SERVICE}\"\
+      \nMETHOD=\"GET\"\n\ncurl -v \"${URL}\" \\\n-X \"${METHOD}\" \\\n-H \"Content-Type:application/json\"\
+      \ > nodes.json\n\necho \"Results\"\ncat nodes.json\n\ngrep -q '{\"result\":\"\
+      Stage data created\"}' nodes.json && {\n  echo \"Stage data created\"\n  exit\
+      \ 1\n}\n\ngrep -q '{\"error\":\"Data not found\"}' nodes.json && {\n  echo \"\
+      Unplanned deployment\"\n  exit 1\n}\n\n\nSERVERS=$(cat nodes.json |python -c\
+      \ \"import sys, json; print ' '.join(map(lambda x: '{}/{}'.format(x['Node'],\
+      \ x['Address']), json.load(sys.stdin)))\")\n\n#echo ${SERVERS}\n\nupdate_status\
+      \ () {\n  NODE_NAME=\"$1\"\n  REVID=\"$2\"\n  STATUS=\"$3\"\n  echo \"$NODE_NAME,\
+      \ $STATUS\"\n  URL=\"${API_HOST}/nodes/${NODE_NAME}\"\n  curl \"${URL}\" \\\n\
+      \    -X PUT \\\n    -H \"Content-Type:application/json\" \\\n    -d \"\n{\n\
+      \  \\\"revisionId\\\": \\\"${REVID}\\\",\n  \\\"status\\\": \\\"${STATUS}\\\"\
+      \n}\n\"\n\n}\n\nfor SERVER in ${SERVERS}; do\n  NODE_NAME=\"${SERVER%/*}\"\n\
+      \  IP=\"${SERVER#*/}\"\n  echo \"Start deploying to: ${NODE_NAME} (${IP})\"\n\
+      \  update_status \"${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\" \"COPY STARTED\"\
+      \n  DEPLOY_SERVER=\"${IP}\"\n#### </Deployment Center> ####\n\nREMOTE_DIRECTORY=${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_JOB_ID}\n\
+      \nHOST_NAME=`hostname`\necho \"### hostname : ${HOST_NAME}\"\n\n#Check MD5Deep\
+      \ exist.\nsudo apt-get update\nmd5deep -v||sudo apt-get install md5deep\n\n\
+      rm -f checksum.md5\nmd5deep -rl * > checksum.md5\n\nmkdir -p ${JOB_NAME}\ncp\
+      \ -f ${ARTIFACTS} ${JOB_NAME}/${ARTIFACTS}\ncd ${JOB_NAME}\n\nRSA_PRIV=~/.ssh/id_rsa\n\
+      mkdir -p ~/.ssh\nchmod 700 ~/.ssh\n\necho \"${secdeploy}\" > ${RSA_PRIV}\nchmod\
+      \ 600 ${RSA_PRIV}\n\nRESULTS=$(ssh -vv -i ${RSA_PRIV} -o UserKnownHostsFile=/dev/null\
+      \ -o StrictHostKeyChecking=no -o LogLevel=quiet -l ${DEPLOY_USER} ${DEPLOY_SERVER}\
+      \ REMOTE_DIRECTORY=$REMOTE_DIRECTORY PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV\
+      \ 'bash -s' <<'ENDSSH'\n\nif [ ! -d /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\
+      \ ]; then\nmkdir -p /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\ncase $?\
+      \ in\n0)\n#echo \" * SEC - Remote Directory Creation : OK \"\necho 0\n;;\n*)\n\
+      echo \" * SEC - Remote Directory Creation : Failed \"\nexit 1\n;;\nesac\nelse\n\
+      #echo \" * SEC - Revision Directory Already exist \"\necho 2\nfi\n\nENDSSH)\n\
+      \n# mkdir result (0: sucess, 1: fail, 2: alreay exist)\ncase $RESULTS in\n0)\n\
+      \        echo \" * SEC - Remote Directory Creation : OK \"        \n;;\n2)\n\
+      \        echo \" * SEC - Revision Directory Already exist \"\n        exit 0\n\
+      ;;\n*)\n        echo \" * SEC - Remote Directory Creation : Failed \"\n    \
+      \    exit 1\n;;\nesac\n\necho \"### execute scp :\"\n\nscp -i ${RSA_PRIV} -o\
+      \ StrictHostKeyChecking=no -r ./ ${DEPLOY_USER}@${DEPLOY_SERVER}:/${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}/\n\
+      \ncase $? in\n0)\n        echo \" * SEC - SSH Push : OK \"\n;;\n*)\n       \
+      \ echo \" * SEC - SSH Push : Failed \"\n\t\texit 1\n;;\nesac\n\nssh -i ${RSA_PRIV}\
+      \ -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=quiet\
+      \ -l ${DEPLOY_USER} ${DEPLOY_SERVER} REMOTE_DIRECTORY=$REMOTE_DIRECTORY PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV\
+      \ 'bash -s' <<'ENDSSH'\n\necho \"### remote path : /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\"\
+      \n\ncd /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\nHOST_NAME=`hostname`\n\
+      echo \"### hostname : ${HOST_NAME}\"\n\n#Check MD5Deep exist.\nmd5deep -v||sudo\
+      \ apt-get install md5deep\nrm -f checksum.md5\nmd5deep -rl * > checksum.md5\n\
+      \nENDSSH\n\n\nssh -i ${RSA_PRIV} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no\
+      \ -o LogLevel=quiet -l ${DEPLOY_USER} ${DEPLOY_SERVER} REMOTE_DIRECTORY=$REMOTE_DIRECTORY\
+      \ PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV 'bash -s' <<'ENDSSH'\n\n\
+      echo \"### remote path : /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\"\n\
+      \ncd /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\n\necho \"### remote target\
+      \ : /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\"\necho \"### remote flist\
+      \ :\"\nls -altr\n\necho \" * SEC - Hash Check Start ... \"\nmd5sum -c checksum.md5\n\
+      case $? in\n\t\t0)\n\t\techo \" * SEC - Hash Check Result  : OK \"\n\t\t;;\n\
+      \t\t*)\n\t\techo \" * SEC - Hash Check Result : Fail \"\n\t\texit 1\n\t\t;;\n\
+      esac\n\nENDSSH\n\n#### <Deployment Center> ####\n  echo \"Finished deploying\
+      \ to: ${NODE_NAME} (${IP})\"\n  update_status \"${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\"\
+      \ \"COPY FINISHED\"\ndone\n#### </Deployment Center> ####\n"
+    target:
+      application: PoC2-api-gateway-jgkong
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: POC
+    type: deployer
+  - name: Move
+    script: "#!/bin/bash\n\n#### <Deployment Center> ####\nAPI_HOST=\"http://approval-tool.mybluemix.net/api/v1\"\
+      \nBASE_URL=\"$API_HOST/deployment/${PIPELINE_ID}\"\n\nURL=\"${BASE_URL}/stages/${PIPELINE_STAGE_ID}/builds/${BUILD_NUMBER}/nodes?service=${SERVICE}\"\
+      \nMETHOD=\"GET\"\n\ncurl -v \"${URL}\" \\\n-X \"${METHOD}\" \\\n-H \"Content-Type:application/json\"\
+      \ > nodes.json\n\necho \"Results\"\ncat nodes.json\n\ngrep -q '{\"result\":\"\
+      Stage data created\"}' nodes.json && {\n  echo \"Stage data created\"\n  exit\
+      \ 1\n}\n\ngrep -q '{\"error\":\"Data not found\"}' nodes.json && {\n  echo \"\
+      Unplanned deployment\"\n  exit 1\n}\n\n\nSERVERS=$(cat nodes.json |python -c\
+      \ \"import sys, json; print ' '.join(map(lambda x: '{}/{}'.format(x['Node'],\
+      \ x['Address']), json.load(sys.stdin)))\")\n\n#echo ${SERVERS}\n\nupdate_status\
+      \ () {\n  NODE_NAME=\"$1\"\n  REVID=\"$2\"\n  STATUS=\"$3\"\n  echo \"$NODE_NAME,\
+      \ $STATUS\"\n  URL=\"${API_HOST}/nodes/${NODE_NAME}\"\n  curl \"${URL}\" \\\n\
+      \    -X PUT \\\n    -H \"Content-Type:application/json\" \\\n    -d \"\n{\n\
+      \  \\\"revisionId\\\": \\\"${REVID}\\\",\n  \\\"status\\\": \\\"${STATUS}\\\"\
+      \n}\n\"\n\n}\n\nfor SERVER in ${SERVERS}; do\n  NODE_NAME=\"${SERVER%/*}\"\n\
+      \  IP=\"${SERVER#*/}\"\n  echo \"Start deploying to: ${NODE_NAME} (${IP})\"\n\
+      \  update_status \"${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\" \"MOVE STARTED\"\
+      \n  DEPLOY_SERVER=\"${IP}\"\n#### </Deployment Center> ####\n\n#### <Deployment\
+      \ Center> ####\n  update_status \"${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\"\
+      \ \"MOVE FAILED\"\n#### </Deployment Center> ####\n\nRSA_PRIV=~/.ssh/id_rsa\n\
+      mkdir -p ~/.ssh\nchmod 700 ~/.ssh\n\necho \"${secdeploy}\" > ${RSA_PRIV}\nchmod\
+      \ 600 ${RSA_PRIV}\n\n###################################\nRESTART=\"RESTART\"\
+      \nDEPLOY_ARTIFACTS=\"ROOT.war\"\nREMOTE_DIRECTORY=${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_JOB_ID}\n\
+      APP_BASE=\"/data/deploy/${TOMCAT_SERVICE_NAME}-webapps\"\n###################################\n\
+      \nssh -i ${RSA_PRIV} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no\
+      \ -o LogLevel=quiet -l ${DEPLOY_USER} ${DEPLOY_SERVER} JOB_NAME=$JOB_NAME RESTART=$RESTART\
+      \ APP_BASE=$APP_BASE LOG_BASE=$LOG_BASE SERVICE_URL=$SERVICE_URL L7CheckHtml_PATH=$L7CheckHtml_PATH\
+      \ L7CheckHtml_FILE=$L7CheckHtml_FILE REMOTE_DIRECTORY=$REMOTE_DIRECTORY PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV\
+      \ JOB_KEY=$JOB_KEY ARTIFACTS=$ARTIFACTS DEPLOY_ARTIFACTS=$DEPLOY_ARTIFACTS TOMCAT_VERSION=$TOMCAT_VERSION\
+      \ L7CheckEnable=$L7CheckEnable SERVICE_URLCheckEnable=$SERVICE_URLCheckEnable\
+      \ TOMCAT_SERVICE_NAME=$TOMCAT_SERVICE_NAME 'bash -s' <<'ENDSSH'\nexport START_CMD=\"\
+      sudo service ${TOMCAT_VERSION} start\"\nexport STOP_CMD=\"sudo service ${TOMCAT_VERSION}\
+      \ stop\"\n\npwd\n\n#!/bin/sh\n\nIN=${DEPLOY_ARTIFACTS}\n\necho ${IN}\n\narr=$(echo\
+      \ $IN | tr \"/\" \"\\n\")\n\necho ${arr}\n\nfull_file_name=\"\"\n\nfor x in\
+      \ $arr\ndo\n    echo \"> [$x]\"\n    full_file_name=$x\ndone\n\narr=$(echo $full_file_name\
+      \ | tr \".\" \"\\n\")\n\necho $arr\n\ncheck=true\nfile_name=\"\"\nexten=\"\"\
+      \n\nfor x in $arr\ndo\n    if [ $check = true ];then\n       file_name=$x\n\
+      \       check=false\n    else\n       exten=$x\n    fi\ndone\n\necho \"FILE_NAME\
+      \ : $file_name\"\necho \"EXT_NAME  : $exten\"\necho \"FULL_NAME : $full_file_name\"\
+      \n\n if [ \"$RESTART\" = \"STOP\" ] || [ \"$RESTART\" = \"RESTART\" ];then\n\
+      \ \techo \" * SEC - Stop Tomcat Service : Initiated \"\n\t\n\tif [ \"$L7CheckEnable\"\
+      \ = \"true\" ];then\n\t\t# Remove L7 Check Html\n\t\tif [ -e \"${L7CheckHtml_PATH}\"\
+      \"${L7CheckHtml_FILE}\" ];then\n\t\t\tsudo mv $L7CheckHtml_PATH$L7CheckHtml_FILE\
+      \ $L7CheckHtml_PATH$L7CheckHtml_FILE.bak\n\t\t\tcase $? in\n\t\t\t0)\n\t\t\t\
+      echo \" * SEC - Moving $L7CheckHtml_FILE : OK \"\n\t\t\t;;\n\t\t\t*)\n\t\t\t\
+      echo \" * SEC - Moving $L7CheckHtml_FILE : Fail \"\n#### <Deployment Center>\
+      \ ####\n  update_status \"${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\" \"\
+      MOVE FAILED\"\n#### </Deployment Center> ####\n\t\t\texit 1\n\t\t\t;;\n\t\t\t\
+      esac\n\t\t\tsleep 15\n\t\telse\n\t\t\techo \" * SEC - No $L7CheckHtml_FILE exist\
+      \ \"\n\t\tfi\n\t \n\t\t# Check http access log\n\t\tcurrent_date=`date +\"%Y-%m-%d\"\
+      `\n\t\tf_cnt=$(sudo find ${LOG_BASE} -name ${TOMCAT_SERVICE_NAME}_access*\"\
+      ${current_date}\".* | wc -l)\n\t\tif [ f_cnt > 0  ];then\n\t\t\twhile [ true\
+      \ ]\n\t\t\tdo\n\t\t\t\techo \" * SEC - Checking new http access .... \"\n\t\t\
+      \t\taccess1=`sudo sh -c \"cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access*${current_date}.*\
+      \ | grep -v ${L7CheckHtml_FILE} | wc -l\"`\n\t\t\t\techo $access1\n\t\t\t\t\
+      #sleep 15\n\t\t\t\tsleep 3\n\t\t\t\taccess2=`sudo sh -c \"cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access*${current_date}.*\
+      \ | grep -v ${L7CheckHtml_FILE} | wc -l\"`\n\t\t\t\techo $access2\n\t\t\t\t\
+      if [ $access1 -eq $access2 ];then\n\t\t\t\t\techo \" * SEC - No new http access\
+      \ was checked \"\n\t\t\t\tbreak\n\t\t\t\tfi\n\t\t\tdone\n\t\telse\n\t\t\techo\
+      \ \" * SEC - No current access log exist \"\n\t\tfi\n \n\telse\n\t\techo \"\
+      \ * SEC - L7 Check Disabled \"\n\tfi\n\t\n\t# Stop Tomcat Service\n\tsudo service\
+      \ ${TOMCAT_VERSION} stop\n\tcase $? in\n\t\t0)\n\t\techo \" * SEC - Stopping\
+      \ Tomcat service : OK \"\n\t\t;;\n\t\t*)\n\t\techo \" * SEC - Stopping Tomcat\
+      \ service : Fail \"\n#### <Deployment Center> ####\n  update_status \"${NODE_NAME}\"\
+      \ \"${PIPELINE_STAGE_INPUT_REV}\" \"MOVE FAILED\"\n#### </Deployment Center>\
+      \ ####\n\t\texit 1\n\t\t;;\n\t\tesac\n\t\t\n else\n\techo \" * SEC - Stop Tomcat\
+      \ Service : Skipped \"\n fi\n \t\t\n if [ \"$RESTART\" = \"START\" ] || [ \"\
+      $RESTART\" = \"RESTART\" ];then\n\techo \" * SEC - Start Tomcat Service : Initiated\
+      \ \"\n\t# Copy application to Tomcat webapp directory\n\tcd ${APP_BASE}\n\t\n\
+      \tif [ -d \"$file_name\" ];then\n\t\techo \"sudo rm -r $file_name\"\n\t\tsudo\
+      \ rm -r $file_name\n\tfi\n\t\n\tif [ -f \"$full_file_name\" ];then\n\t\techo\
+      \ \"sudo rm $full_file_name\"\n\t\tsudo rm $full_file_name\n\tfi\n\t\n\techo\
+      \ \"sudo mkdir $file_name\"\t\n\tsudo mkdir $file_name\n\n\tsudo cp /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}/$ARTIFACTS\
+      \ ${APP_BASE}/$file_name/$full_file_name\n\n\tcd ${APP_BASE}/$file_name\n\t\
+      sudo jar xvf $full_file_name\n\tsudo rm $full_file_name\n\n\tsudo chown ${TOMCAT_VERSION}.${TOMCAT_VERSION}\
+      \ ${APP_BASE} -R\n\t\n\t# Start Tomcat Service\n\tsudo service ${TOMCAT_VERSION}\
+      \ start\n\tcase $? in\n\t0)\n\t\techo \" * SEC - Tomcat Service Starting : OK\
+      \ \"\n\t;;\n\t*)\n\t\techo \" * SEC - System Staging : Failed \"\n#### <Deployment\
+      \ Center> ####\n  update_status \"${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\"\
+      \ \"MOVE FAILED\"\n#### </Deployment Center> ####\n\t\texit 1\n\t;;\n\tesac\n\
+      \t\n\t# Check Business URL \n\tif [ \"$SERVICE_URLCheckEnable\" = \"true\" ];then\n\
+      \t    echo \" * SEC - Checking $SERVICE_URL ... \"\n\t    count=300\n      \
+      \  until [ \"$count\" -eq 0 ];\n\t    do code=$(curl -sL -k -w \"%{http_code}\\\
+      \\n\" \"$SERVICE_URL\" -o /dev/null)\n\t\t    echo \" * SEC - Found code $code\"\
+      \n\t\t    if [ \"x$code\" = \"x200\" ]; then \n\t\t\t    echo \" * SEC - $SERVICE_URL\
+      \ is ready to Service \"\n\t\t        break\n\t\t    fi\n\t        sleep 1\n\
+      \            count=$((count-1))\n\t    done\n        if [ \"$count\" -eq 0 ];\
+      \ then\n            echo \" * SEC - Busines URL Check Failed 300 times\"\n####\
+      \ <Deployment Center> ####\n  update_status \"${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\"\
+      \ \"MOVE FAILED\"\n#### </Deployment Center> ####\n            exit 1\n    \
+      \    fi\n\telse\n\t\techo \" * SEC - Business URL Check Skipped \"\n\tfi\n\t\
+      \n \t# Check L7 Check Html\n\tif [ \"$L7CheckEnable\" = \"true\" ];then\n\t\t\
+      if [ -e \"${L7CheckHtml_PATH}\"\"${L7CheckHtml_FILE}\"\".bak\" ];then\n\t\t\t\
+      sudo mv $L7CheckHtml_PATH$L7CheckHtml_FILE.bak $L7CheckHtml_PATH$L7CheckHtml_FILE\n\
+      \t\telse\n\t\t\t# Create L7 Check Html\n\t\t\tsudo mkdir $L7CheckHtml_PATH\n\
+      \t\t\tsudo touch $L7CheckHtml_PATH$L7CheckHtml_FILE\n\t\t\tsudo chown ${TOMCAT_VERSION}.${TOMCAT_VERSION}\
+      \ $L7CheckHtml_PATH -R\n\t\t\tcase $? in\n\t\t\t0)\n\t\t\techo \" * SEC - $(ls\
+      \ -la ${L7CheckHtml_PATH}${L7CheckHtml_FILE}) Creation : OK \"\n\t\t\t;;\n\t\
+      \t\t*)\n\t\t\techo \" * SEC - $L7CheckHtml_FILE Creation : Fail \"\n#### <Deployment\
+      \ Center> ####\n  update_status \"${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\"\
+      \ \"MOVE FAILED\"\n#### </Deployment Center> ####\n\t\t\texit 1\n\t\t\t;;\n\t\
+      \tesac\n\t\tfi\n\t\n\t\tsleep 3\n \n\t\t# Check New HTTP Access \n\t\tif [ -e\
+      \ ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access.\"${current_date}\".log ];then\n\t\
+      \t\techo \" * SEC - Checking new http access .... \"\n\t\t\taccess1=`sudo sh\
+      \ -c 'cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access.${current_date}.log | grep\
+      \ -v \"${L7CheckHtml_FILE} HTTP/1.1\\\" 200 -\" | wc -l'`\n\t\t\techo $access1\n\
+      \t\t\techo \" * SEC - Sleep 3 Sec \"\n\t\t\tsleep 3\n\t\t\taccess2=`sudo sh\
+      \ -c 'cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access.${current_date}.log | grep\
+      \ -v \"${L7CheckHtml_FILE} HTTP/1.1\\\" 200 -\" | wc -l'`\n\t\t\techo $access2\n\
+      \t\t\tif [ $access1 -eq $access2 ];then\n\t\t\t\techo \" * SEC - No new http\
+      \ access was checked \"\n\t\t\telse \n\t\t\t\techo \" * SEC - New http access\
+      \ was checked \"\n\t\t\tfi\t\n\t\telse\n\t\t\techo \" * SEC - No current access\
+      \ log exist \"\n\t\tfi\n\t\n\telse\n\t\techo \" * SEC - Access Log Check Skipped\
+      \ \"\n\tfi\n \n else\n\techo \" * SEC - Start Tomcat Service : Skipped \"\n\
+      \ fi\n\n #if [ \"$RESTART\" = \"PUSH\" ] || [ \"$RESTART\" = \"STOP\" ] ;then\
+      \ \n#\tcd ~/${REMOTE_DIRECTORY}\n# \techo \" * SEC - Pushed file is/are located\
+      \ in $(pwd) \"\n# \telse\n# \techo \" * SEC - Pushed file is/are deployed in\
+      \ ${APP_BASE} \"\n# fi\n\n# Deployed File List\n#       echo \" * SEC - Deployed\
+      \ Flie List - Start  \"\n#\tls -Rla ${APP_BASE}\n#       echo \" * SEC - Deployed\
+      \ Flie List - End\"\n  \nexit 0\n\nENDSSH\n\n#### <Deployment Center> ####\n\
+      \  echo \"Finished deploying to: ${NODE_NAME} (${IP})\"\n  update_status \"\
+      ${NODE_NAME}\" \"${PIPELINE_STAGE_INPUT_REV}\" \"MOVE FINISHED\"\ndone\n####\
+      \ </Deployment Center> ####"
+    target:
+      application: PoC2-api-gateway-jgkong
+      organization: VDInfraPOC
+      region_id: ibm:yp:us-south
+      space: POC
+    type: deployer
+  name: 'PROD: Deploy (w/o extension)'
+  properties:
+  - name: secdeploy
+    type: text_area
+    value: ''
+  - name: ARTIFACTS
+    type: text
+    value: spring-petclinic-api-gateway-1.5.2.war
+  - name: DEPLOY_SERVER
+    type: text
+    value: api-gateway.iscloud.co.kr
+  - name: DEPLOY_USER
+    type: text
+    value: deploy
+  - name: REMOTE_DIRECTORY
+    type: text
+    value: data/artifacts
+  - name: TOMCAT_VERSION
+    type: text
+    value: tomcat8
+  - name: L7CheckEnable
+    type: text
+    value: 'true'
+  - name: L7CheckHtml_PATH
+    type: text
+    value: /data/deploy/webapps/alive/
+  - name: L7CheckHtml_FILE
+    type: text
+    value: L7check.html
+  - name: LOG_BASE
+    type: text
+    value: /data/deploy/logs/
+  - name: TOMCAT_SERVICE_NAME
+    type: text
+    value: api-gateway
+  - name: SERVICE_URLCheckEnable
+    type: text
+    value: 'true'
+  - name: SERVICE_URL
+    type: text
+    value: http://api-gateway.iscloud.co.kr:8081/#!/welcome
+  - name: SERVICE
+    type: text
+    value: api-gateway
+- inputs:
+  - dir_name: null
+    job: Package-api-gateway
+    stage: Build
+    type: job
+  jobs:
+  - APPROVERS: jgkong@kr.ibm.com
+    extension_id: ibm.devops.services.deployment_center.approval_gate
+    name: QA Approval Gate
+    type: tester
+  - APPROVERS: jgkong@kr.ibm.com
+    extension_id: ibm.devops.services.deployment_center.approval_gate
+    name: PM Approval Gate
     type: tester
   - name: '[PH] Deploy to Production'
     script: '#!/bin/bash
@@ -556,8 +813,7 @@ stages:
   properties:
   - name: SSH_KEY
     type: text_area
-    value: '-----BEGIN RSA PRIVATE KEY-----
-      -----END RSA PRIVATE KEY-----'
+    value: ''
   - name: TARGET
     type: text
     value: spring-petclinic-api-gateway-1.5.2.jar
@@ -573,193 +829,3 @@ stages:
       cp /tmp/spring-petclinic-*.jar /root/poc2/
 
       /root/poc2/run.sh start'
-- inputs:
-  - dir_name: null
-    job: Package-api-gateway
-    stage: Build
-    type: job
-  jobs:
-  - name: Copy
-    script: "#!/bin/bash\n\nREMOTE_DIRECTORY=${REMOTE_DIRECTORY}/${PIPELINE_ID}\n\n\
-      HOST_NAME=`hostname`\necho \"### hostname : ${HOST_NAME}\"\n\n#Check MD5Deep\
-      \ exist.\nsudo apt-get update\nmd5deep -v||sudo apt-get install md5deep\n\n\
-      rm -f checksum.md5\nmd5deep -rl * > checksum.md5\n\nmkdir -p ${JOB_NAME}\ncp\
-      \ -f ${ARTIFACTS} ${JOB_NAME}/${ARTIFACTS}\ncd ${JOB_NAME}\n\nRSA_PRIV=~/.ssh/id_rsa\n\
-      mkdir -p ~/.ssh\nchmod 700 ~/.ssh\n\necho \"${secdeploy}\" > ${RSA_PRIV}\nchmod\
-      \ 600 ${RSA_PRIV}\n\nRESULTS=$(ssh -vv -i ${RSA_PRIV} -o UserKnownHostsFile=/dev/null\
-      \ -o StrictHostKeyChecking=no -o LogLevel=quiet -l ${DEPLOY_USER} ${DEPLOY_SERVER}\
-      \ REMOTE_DIRECTORY=$REMOTE_DIRECTORY PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV\
-      \ 'bash -s' <<'ENDSSH'\n\nif [ ! -d /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\
-      \ ]; then\nmkdir -p /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\ncase $?\
-      \ in\n0)\n#echo \" * SEC - Remote Directory Creation : OK \"\necho 0\n;;\n*)\n\
-      echo \" * SEC - Remote Directory Creation : Failed \"\nexit 1\n;;\nesac\nelse\n\
-      #echo \" * SEC - Revision Directory Already exist \"\necho 2\nfi\n\nENDSSH)\n\
-      \n# mkdir result (0: sucess, 1: fail, 2: alreay exist)\ncase $RESULTS in\n0)\n\
-      \        echo \" * SEC - Remote Directory Creation : OK \"        \n;;\n2)\n\
-      \        echo \" * SEC - Revision Directory Already exist \"\n        exit 0\n\
-      ;;\n*)\n        echo \" * SEC - Remote Directory Creation : Failed \"\n    \
-      \    exit 1\n;;\nesac\n\necho \"### execute scp :\"\n\nscp -i ${RSA_PRIV} -o\
-      \ StrictHostKeyChecking=no -r ./ ${DEPLOY_USER}@${DEPLOY_SERVER}:/${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}/\n\
-      \ncase $? in\n0)\n        echo \" * SEC - SSH Push : OK \"\n;;\n*)\n       \
-      \ echo \" * SEC - SSH Push : Failed \"\n\t\texit 1\n;;\nesac\n\nssh -i ${RSA_PRIV}\
-      \ -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=quiet\
-      \ -l ${DEPLOY_USER} ${DEPLOY_SERVER} REMOTE_DIRECTORY=$REMOTE_DIRECTORY PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV\
-      \ 'bash -s' <<'ENDSSH'\n\necho \"### remote path : /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\"\
-      \n\ncd /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\nHOST_NAME=`hostname`\n\
-      echo \"### hostname : ${HOST_NAME}\"\n\n#Check MD5Deep exist.\nmd5deep -v||sudo\
-      \ apt-get install md5deep\nrm -f checksum.md5\nmd5deep -rl * > checksum.md5\n\
-      \nENDSSH\n\n\nssh -i ${RSA_PRIV} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no\
-      \ -o LogLevel=quiet -l ${DEPLOY_USER} ${DEPLOY_SERVER} REMOTE_DIRECTORY=$REMOTE_DIRECTORY\
-      \ PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV 'bash -s' <<'ENDSSH'\n\n\
-      echo \"### remote path : /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\"\n\
-      \ncd /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\n\necho \"### remote target\
-      \ : /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}\"\necho \"### remote flist\
-      \ :\"\nls -altr\n\necho \" * SEC - Hash Check Start ... \"\nmd5sum -c checksum.md5\n\
-      case $? in\n\t\t0)\n\t\techo \" * SEC - Hash Check Result  : OK \"\n\t\t;;\n\
-      \t\t*)\n\t\techo \" * SEC - Hash Check Result : Fail \"\n\t\texit 1\n\t\t;;\n\
-      esac\n\nENDSSH\n\n"
-    target:
-      application: PoC2-api-gateway-jgkong
-      organization: VDInfraPOC
-      region_id: ibm:yp:us-south
-      space: prod
-    type: deployer
-  - name: Move
-    script: "#!/bin/bash\n\nRSA_PRIV=~/.ssh/id_rsa\nmkdir -p ~/.ssh\nchmod 700 ~/.ssh\n\
-      \necho \"${secdeploy}\" > ${RSA_PRIV}\nchmod 600 ${RSA_PRIV}\n\n###################################\n\
-      RESTART=\"RESTART\"\nDEPLOY_ARTIFACTS=\"ROOT.war\"\nREMOTE_DIRECTORY=data/artifacts/${PIPELINE_ID}\n\
-      APP_BASE=\"/data/deploy/${TOMCAT_SERVICE_NAME}-webapps\"\n###################################\n\
-      \nssh -i ${RSA_PRIV} -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no\
-      \ -o LogLevel=quiet -l ${DEPLOY_USER} ${DEPLOY_SERVER} JOB_NAME=$JOB_NAME RESTART=$RESTART\
-      \ APP_BASE=$APP_BASE LOG_BASE=$LOG_BASE SERVICE_URL=$SERVICE_URL L7CheckHtml_PATH=$L7CheckHtml_PATH\
-      \ L7CheckHtml_FILE=$L7CheckHtml_FILE REMOTE_DIRECTORY=$REMOTE_DIRECTORY PIPELINE_STAGE_INPUT_REV=$PIPELINE_STAGE_INPUT_REV\
-      \ JOB_KEY=$JOB_KEY ARTIFACTS=$ARTIFACTS DEPLOY_ARTIFACTS=$DEPLOY_ARTIFACTS TOMCAT_VERSION=$TOMCAT_VERSION\
-      \ L7CheckEnable=$L7CheckEnable SERVICE_URLCheckEnable=$SERVICE_URLCheckEnable\
-      \ TOMCAT_SERVICE_NAME=$TOMCAT_SERVICE_NAME 'bash -s' <<'ENDSSH'\nexport START_CMD=\"\
-      sudo service ${TOMCAT_VERSION} start\"\nexport STOP_CMD=\"sudo service ${TOMCAT_VERSION}\
-      \ stop\"\n\npwd\n\n#!/bin/sh\n\nIN=${DEPLOY_ARTIFACTS}\n\necho ${IN}\n\narr=$(echo\
-      \ $IN | tr \"/\" \"\\n\")\n\necho ${arr}\n\nfull_file_name=\"\"\n\nfor x in\
-      \ $arr\ndo\n    echo \"> [$x]\"\n    full_file_name=$x\ndone\n\narr=$(echo $full_file_name\
-      \ | tr \".\" \"\\n\")\n\necho $arr\n\ncheck=true\nfile_name=\"\"\nexten=\"\"\
-      \n\nfor x in $arr\ndo\n    if [ $check = true ];then\n       file_name=$x\n\
-      \       check=false\n    else\n       exten=$x\n    fi\ndone\n\necho \"FILE_NAME\
-      \ : $file_name\"\necho \"EXT_NAME  : $exten\"\necho \"FULL_NAME : $full_file_name\"\
-      \n\n if [ \"$RESTART\" = \"STOP\" ] || [ \"$RESTART\" = \"RESTART\" ];then\n\
-      \ \techo \" * SEC - Stop Tomcat Service : Initiated \"\n\t\n\tif [ \"$L7CheckEnable\"\
-      \ = \"true\" ];then\n\t\t# Remove L7 Check Html\n\t\tif [ -e \"${L7CheckHtml_PATH}\"\
-      \"${L7CheckHtml_FILE}\" ];then\n\t\t\tsudo mv $L7CheckHtml_PATH$L7CheckHtml_FILE\
-      \ $L7CheckHtml_PATH$L7CheckHtml_FILE.bak\n\t\t\tcase $? in\n\t\t\t0)\n\t\t\t\
-      echo \" * SEC - Moving $L7CheckHtml_FILE : OK \"\n\t\t\t;;\n\t\t\t*)\n\t\t\t\
-      echo \" * SEC - Moving $L7CheckHtml_FILE : Fail \"\n\t\t\texit 1\n\t\t\t;;\n\
-      \t\t\tesac\n\t\t\tsleep 15\n\t\telse\n\t\t\techo \" * SEC - No $L7CheckHtml_FILE\
-      \ exist \"\n\t\tfi\n\t \n\t\t# Check http access log\n\t\tcurrent_date=`date\
-      \ +\"%Y-%m-%d\"`\n\t\tf_cnt=$(sudo find ${LOG_BASE} -name ${TOMCAT_SERVICE_NAME}_access*\"\
-      ${current_date}\".* | wc -l)\n\t\tif [ f_cnt > 0  ];then\n\t\t\twhile [ true\
-      \ ]\n\t\t\tdo\n\t\t\t\techo \" * SEC - Checking new http access .... \"\n\t\t\
-      \t\taccess1=`sudo sh -c \"cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access*${current_date}.*\
-      \ | grep -v ${L7CheckHtml_FILE} | wc -l\"`\n\t\t\t\techo $access1\n\t\t\t\t\
-      #sleep 15\n\t\t\t\tsleep 3\n\t\t\t\taccess2=`sudo sh -c \"cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access*${current_date}.*\
-      \ | grep -v ${L7CheckHtml_FILE} | wc -l\"`\n\t\t\t\techo $access2\n\t\t\t\t\
-      if [ $access1 -eq $access2 ];then\n\t\t\t\t\techo \" * SEC - No new http access\
-      \ was checked \"\n\t\t\t\tbreak\n\t\t\t\tfi\n\t\t\tdone\n\t\telse\n\t\t\techo\
-      \ \" * SEC - No current access log exist \"\n\t\tfi\n \n\telse\n\t\techo \"\
-      \ * SEC - L7 Check Disabled \"\n\tfi\n\t\n\t# Stop Tomcat Service\n\tsudo service\
-      \ ${TOMCAT_VERSION} stop\n\tcase $? in\n\t\t0)\n\t\techo \" * SEC - Stopping\
-      \ Tomcat service : OK \"\n\t\t;;\n\t\t*)\n\t\techo \" * SEC - Stopping Tomcat\
-      \ service : Fail \"\n\t\texit 1\n\t\t;;\n\t\tesac\n\t\t\n else\n\techo \" *\
-      \ SEC - Stop Tomcat Service : Skipped \"\n fi\n \t\t\n if [ \"$RESTART\" = \"\
-      START\" ] || [ \"$RESTART\" = \"RESTART\" ];then\n\techo \" * SEC - Start Tomcat\
-      \ Service : Initiated \"\n\t# Copy application to Tomcat webapp directory\n\t\
-      cd ${APP_BASE}\n\t\n\tif [ -d \"$file_name\" ];then\n\t\techo \"sudo rm -r $file_name\"\
-      \n\t\tsudo rm -r $file_name\n\tfi\n\t\n\tif [ -f \"$full_file_name\" ];then\n\
-      \t\techo \"sudo rm $full_file_name\"\n\t\tsudo rm $full_file_name\n\tfi\n\t\n\
-      \techo \"sudo mkdir $file_name\"\t\n\tsudo mkdir $file_name\n\n\tsudo cp /${REMOTE_DIRECTORY}/${PIPELINE_STAGE_INPUT_REV}/$ARTIFACTS\
-      \ ${APP_BASE}/$file_name/$full_file_name\n\n\tcd ${APP_BASE}/$file_name\n\t\
-      sudo jar xvf $full_file_name\n\tsudo rm $full_file_name\n\n\tsudo chown ${TOMCAT_VERSION}.${TOMCAT_VERSION}\
-      \ ${APP_BASE} -R\n\t\n\t# Start Tomcat Service\n\tsudo service ${TOMCAT_VERSION}\
-      \ start\n\tcase $? in\n\t0)\n\t\techo \" * SEC - Tomcat Service Starting : OK\
-      \ \"\n\t;;\n\t*)\n\t\techo \" * SEC - System Staging : Failed \"\n\t\texit 1\n\
-      \t;;\n\tesac\n\t\n\t# Check Business URL \n\tif [ \"$SERVICE_URLCheckEnable\"\
-      \ = \"true\" ];then\n\t    echo \" * SEC - Checking $SERVICE_URL ... \"\n\t\
-      \    count=300\n        until [ \"$count\" -eq 0 ];\n\t    do code=$(curl -sL\
-      \ -k -w \"%{http_code}\\\\n\" \"$SERVICE_URL\" -o /dev/null)\n\t\t    echo \"\
-      \ * SEC - Found code $code\"\n\t\t    if [ \"x$code\" = \"x200\" ]; then \n\t\
-      \t\t    echo \" * SEC - $SERVICE_URL is ready to Service \"\n\t\t        break\n\
-      \t\t    fi\n\t        sleep 1\n            count=$((count-1))\n\t    done\n\
-      \        if [ \"$count\" -eq 0 ]; then\n            echo \" * SEC - Busines\
-      \ URL Check Failed 300 times\"\n            exit 1\n        fi\n\telse\n\t\t\
-      echo \" * SEC - Business URL Check Skipped \"\n\tfi\n\t\n \t# Check L7 Check\
-      \ Html\n\tif [ \"$L7CheckEnable\" = \"true\" ];then\n\t\tif [ -e \"${L7CheckHtml_PATH}\"\
-      \"${L7CheckHtml_FILE}\"\".bak\" ];then\n\t\t\tsudo mv $L7CheckHtml_PATH$L7CheckHtml_FILE.bak\
-      \ $L7CheckHtml_PATH$L7CheckHtml_FILE\n\t\telse\n\t\t\t# Create L7 Check Html\n\
-      \t\t\tsudo mkdir $L7CheckHtml_PATH\n\t\t\tsudo touch $L7CheckHtml_PATH$L7CheckHtml_FILE\n\
-      \t\t\tsudo chown ${TOMCAT_VERSION}.${TOMCAT_VERSION} $L7CheckHtml_PATH -R\n\t\
-      \t\tcase $? in\n\t\t\t0)\n\t\t\techo \" * SEC - $(ls -la ${L7CheckHtml_PATH}${L7CheckHtml_FILE})\
-      \ Creation : OK \"\n\t\t\t;;\n\t\t\t*)\n\t\t\techo \" * SEC - $L7CheckHtml_FILE\
-      \ Creation : Fail \"\n\t\t\texit 1\n\t\t\t;;\n\t\tesac\n\t\tfi\n\t\n\t\tsleep\
-      \ 3\n \n\t\t# Check New HTTP Access \n\t\tif [ -e ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access.\"\
-      ${current_date}\".log ];then\n\t\t\techo \" * SEC - Checking new http access\
-      \ .... \"\n\t\t\taccess1=`sudo sh -c 'cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access.${current_date}.log\
-      \ | grep -v \"${L7CheckHtml_FILE} HTTP/1.1\\\" 200 -\" | wc -l'`\n\t\t\techo\
-      \ $access1\n\t\t\techo \" * SEC - Sleep 3 Sec \"\n\t\t\tsleep 3\n\t\t\taccess2=`sudo\
-      \ sh -c 'cat ${LOG_BASE}${TOMCAT_SERVICE_NAME}_access.${current_date}.log |\
-      \ grep -v \"${L7CheckHtml_FILE} HTTP/1.1\\\" 200 -\" | wc -l'`\n\t\t\techo $access2\n\
-      \t\t\tif [ $access1 -eq $access2 ];then\n\t\t\t\techo \" * SEC - No new http\
-      \ access was checked \"\n\t\t\telse \n\t\t\t\techo \" * SEC - New http access\
-      \ was checked \"\n\t\t\tfi\t\n\t\telse\n\t\t\techo \" * SEC - No current access\
-      \ log exist \"\n\t\tfi\n\t\n\telse\n\t\techo \" * SEC - Access Log Check Skipped\
-      \ \"\n\tfi\n \n else\n\techo \" * SEC - Start Tomcat Service : Skipped \"\n\
-      \ fi\n\n #if [ \"$RESTART\" = \"PUSH\" ] || [ \"$RESTART\" = \"STOP\" ] ;then\
-      \ \n#\tcd ~/${REMOTE_DIRECTORY}\n# \techo \" * SEC - Pushed file is/are located\
-      \ in $(pwd) \"\n# \telse\n# \techo \" * SEC - Pushed file is/are deployed in\
-      \ ${APP_BASE} \"\n# fi\n\n# Deployed File List\n#       echo \" * SEC - Deployed\
-      \ Flie List - Start  \"\n#\tls -Rla ${APP_BASE}\n#       echo \" * SEC - Deployed\
-      \ Flie List - End\"\n  \nexit 0\n\nENDSSH\n"
-    target:
-      application: PoC2-api-gateway-jgkong
-      organization: VDInfraPOC
-      region_id: ibm:yp:us-south
-      space: prod
-    type: deployer
-  name: 'PROD: Deploy (w/o extension)'
-  properties:
-  - name: secdeploy
-    type: text_area
-    value: '-----BEGIN RSA PRIVATE KEY-----
-      -----END RSA PRIVATE KEY-----'
-  - name: ARTIFACTS
-    type: text
-    value: spring-petclinic-api-gateway-1.5.2.war
-  - name: DEPLOY_SERVER
-    type: text
-    value: api-gateway.iscloud.co.kr
-  - name: DEPLOY_USER
-    type: text
-    value: deploy
-  - name: REMOTE_DIRECTORY
-    type: text
-    value: data/artifacts
-  - name: TOMCAT_VERSION
-    type: text
-    value: tomcat8
-  - name: L7CheckEnable
-    type: text
-    value: 'true'
-  - name: L7CheckHtml_PATH
-    type: text
-    value: /data/deploy/webapps/alive/
-  - name: L7CheckHtml_FILE
-    type: text
-    value: L7check.html
-  - name: LOG_BASE
-    type: text
-    value: /data/deploy/logs/
-  - name: TOMCAT_SERVICE_NAME
-    type: text
-    value: api-gateway
-  - name: SERVICE_URLCheckEnable
-    type: text
-    value: 'true'
-  - name: SERVICE_URL
-    type: text
-    value: http://api-gateway.iscloud.co.kr:8081/#!/welcome

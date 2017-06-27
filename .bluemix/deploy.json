@@ -1,0 +1,108 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "messages": {
+       "$i18n": "locales.yml"
+    },
+     "title": {
+      "$ref": "#/messages/deploy.title"
+    },
+    "description": {
+      "$ref": "#/messages/deploy.description"
+    },
+    "longDescription": {
+      "$ref": "#/messages/deploy.longDescription"
+    },
+    "type": "object",
+    "properties": {
+        "prod-region": {
+            "description": "The bluemix region",
+            "type": "string"
+        },
+        "prod-organization": {
+            "description": "The bluemix org",
+            "type": "string"
+        },
+       "prod-space": {
+            "description": "The bluemix space",
+            "type": "string"
+        },
+       "api-key": {
+            "description": "Required for **Federated ID** since Federated ID can't login with Bluemix user and password via Bluemix CLI. You can obtain your API_KEY with [bx iam api-key-create) or via the console at https://console.ng.bluemix.net/iam/#/apikeys by clicking **Create API key** (Each API key only can be viewed once).",
+            "type": "string"
+        },
+       "prod-cluster-name": {
+            "description": "Your cluster name. Retrieve it with [bx cs clusters] or via the console at https://console.ng.bluemix.net/containers-kubernetes/home/clusters .",
+            "type": "string"
+        },
+       "app-name": {
+            "description": {
+              "$ref": "#/messages/deploy.appDescription"
+            },
+            "type": "string"
+        }
+    },
+    "required": ["prod-region", "prod-organization", "prod-space", "api-key", "cluster-name", "app-name"],
+    "form": [
+       {
+          "type": "validator",
+          "url": "/devops/setup/bm-helper/helper.html"
+       },{
+          "type": "text",
+          "readonly": false,
+          "title": {
+            "$ref": "#/messages/deploy.appName"
+          },
+          "key": "app-name"
+        },{
+          "type": "password",
+          "readonly": false,
+          "title": "Bluemix API Key",
+          "key": "api-key"
+        },{
+          "type": "text",
+          "readonly": false,
+          "title": "Kubernetes Cluster Name",
+          "key": "prod-cluster-name"
+        },{
+            "type": "table",
+            "columnCount": 4,
+            "widths": ["15%", "28%", "28%", "28%"],
+            "items": [
+                {
+                  "type": "label",
+                  "title": ""
+                },{
+                  "type": "label",
+                  "title": {
+                    "$ref": "#/messages/region"
+                  }
+                },{
+                  "type": "label",
+                  "title": {
+                    "$ref": "#/messages/organization"
+                  }
+                },{
+                  "type": "label",
+                  "title": {
+                    "$ref": "#/messages/space"
+                  }
+                },{
+                  "type": "label",
+                  "title": {
+                    "$ref": "#/messages/prodStage"
+                  }
+                },{
+                  "type": "select",
+                  "key": "prod-region"
+                },{
+                  "type": "select",
+                  "key": "prod-organization"
+                },{
+                  "type": "select",
+                  "key": "prod-space",
+                  "readonly": false
+                }
+            ]
+        }
+    ]
+}
