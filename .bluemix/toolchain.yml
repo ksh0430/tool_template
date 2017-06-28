@@ -8,7 +8,7 @@ toolchain:
 description: Wed Jun 28 01:27:06 UTC 2017-1
 name: PoC2_petclinic_microservice_jgkong
 form:
-  pipeline:
+  service_pipeline_PoC2-api-gateway-jgkong:
     parameters:
       api-gateway-app-name: api-gateway-{{timestamp}}
     schema:
