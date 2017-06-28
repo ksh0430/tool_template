@@ -10,7 +10,7 @@ name: PoC2_petclinic_microservice_jgkong
 form:
   pipeline:
     parameters:
-      api-gateway-app-name: api-gateway-{{timestamp}}
+      app-name: api-gateway-{{timestamp}}
     schema:
       $ref: deploy.json
 service_apm:
