@@ -1,5 +1,13 @@
 messages:
   $i18n: locales.yml
+template:
+  name:
+    $ref: "#/messages/template.name"
+  description:
+    $ref: "#/messages/template.description"
+  required:
+    - service_pipeline_PoC2-api-gateway-jgkong
+    - service_github_spring-petclinic-microservices
 toolchain:
   name: 'secure-kubernetes-toolchain-{{timestamp}}'
   template:
