@@ -3,7 +3,7 @@ messages:
 template:
   name:
     $ref: "#/messages/template.name"
-  description: 'abcd123456'
+  description: 'abcd1234567'
   required:
     - service_pipeline_PoC2-api-gateway-jgkong
     - service_github_spring-petclinic-microservices
@@ -67,4 +67,10 @@ services:
   service_slack:
     parameters: {}
     service_id: slack
+  service_apm:
+    parameters: {}
+    service_id: apm
+  service_draservicebroker:
+    $ref: dra.yml
+    service_id: draservicebroker
 version: '2'
