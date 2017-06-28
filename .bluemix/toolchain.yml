@@ -19,12 +19,6 @@ toolchain:
     getting_started:
       $ref: "#/messages/template.gettingStarted" 
 description: Wed Jun 28 01:27:06 UTC 2017
-form:
-  pipeline:
-    parameters:
-      api-gateway-app-name: api-gateway-{{timestamp}}
-    schema:
-      $ref: deploy.json
 name: PoC2_petclinic_microservice_jgkong
 service_apm:
   parameters: {}
