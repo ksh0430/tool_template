@@ -43,10 +43,7 @@
     },
     "required": ["prod-region", "prod-organization", "prod-space", "api-key", "cluster-name", "app-name"],
     "form": [
-       {
-          "type": "validator",
-          "url": "/devops/setup/bm-helper/helper.html"
-       },{
+        {
           "type": "text",
           "readonly": false,
           "title": {
