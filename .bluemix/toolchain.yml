@@ -1,12 +1,18 @@
 messages:
   $i18n: locales.yml
 toolchain:
-  name: 'secure-kubernetes-toolchain-{{timestamp}}'
+  name: 'secure-kubernetes-toolchain-{{timestamp}}123'
   template:
     getting_started:
       $ref: "#/messages/template.gettingStarted" 
 description: Wed Jun 28 01:27:06 UTC 2017-1
 name: PoC2_petclinic_microservice_jgkong
+form:
+  pipeline:
+    parameters:
+      api-gateway-app-name: api-gateway-{{timestamp}}
+    schema:
+      $ref: deploy.json
 service_apm:
   parameters: {}
   service_id: apm
