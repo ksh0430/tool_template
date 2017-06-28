@@ -3,7 +3,7 @@ messages:
 template:
   name:
     $ref: "#/messages/template.name"
-  description: 'abcd1234'
+  description: 'abcd12345'
   required:
     - service_pipeline_PoC2-api-gateway-jgkong
     - service_github_spring-petclinic-microservices
@@ -58,4 +58,7 @@ services:
   service_nexus:
     parameters: {}
     service_id: nexus
+  service_orion:
+    parameters: {}
+    service_id: orion
 version: '2'
