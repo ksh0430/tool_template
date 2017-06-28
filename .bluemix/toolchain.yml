@@ -55,4 +55,7 @@ services:
       - service_github_spring-petclinic-microservices
       ui_pipeline: true
     service_id: pipeline
+  service_nexus:
+    parameters: {}
+    service_id: nexus
 version: '2'
