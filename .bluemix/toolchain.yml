@@ -5,7 +5,7 @@ toolchain:
   template:
     getting_started:
       $ref: "#/messages/template.gettingStarted" 
-description: Wed Jun 28 01:27:06 UTC 2017-12
+description: Wed Jun 28 01:27:06 UTC 2017-2
 name: PoC2_petclinic_microservice_jgkong
 form:
   pipeline:
