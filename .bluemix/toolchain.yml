@@ -3,7 +3,8 @@ messages:
 template:
   name:
     $ref: "#/messages/template.name"
-  description: 'abcd1234567'
+  description:
+    $ref: "#/messages/template.description"
   required:
     - service_pipeline_PoC2-api-gateway-jgkong
     - service_github_spring-petclinic-microservices
@@ -12,7 +13,7 @@ toolchain:
   template:
     getting_started:
       $ref: "#/messages/template.gettingStarted" 
-description: Wed Jun 28 01:27:06 UTC 2017-12 3-'{{form.pipeline.parameters.prod-space}}'
+description: Wed Jun 28 01:27:06 UTC 2017
 name: PoC2_petclinic_microservice_jgkong
 form:
   pipeline:
@@ -21,6 +22,12 @@ form:
     schema:
       $ref: deploy.json
 services:
+  service_apm:
+    parameters: {}
+    service_id: apm
+  service_draservicebroker:
+    $ref: dra.yml
+    service_id: draservicebroker
   service_github_spring-petclinic-microservices:
     parameters:
       api_root_url: https://api.github.com
@@ -43,6 +50,12 @@ services:
       token_url: https://otc-github-public-broker.ng.bluemix.net/github/token
       type: link
     service_id: githubpublic
+  service_nexus:
+    parameters: {}
+    service_id: nexus
+  service_orion:
+    parameters: {}
+    service_id: orion
   service_pipeline_PoC2-api-gateway-jgkong:
     parameters:
       configuration:
@@ -55,22 +68,10 @@ services:
       - service_github_spring-petclinic-microservices
       ui_pipeline: true
     service_id: pipeline
-  service_nexus:
-    parameters: {}
-    service_id: nexus
-  service_orion:
-    parameters: {}
-    service_id: orion
   service_saucelabs:
     parameters: {}
     service_id: saucelabs
   service_slack:
     parameters: {}
     service_id: slack
-  service_apm:
-    parameters: {}
-    service_id: apm
-  service_draservicebroker:
-    $ref: dra.yml
-    service_id: draservicebroker
 version: '2'
