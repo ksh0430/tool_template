@@ -113,3 +113,9 @@ service_slack:
   parameters: {}
   service_id: slack
 version: '0.1'
+form:
+  pipeline:
+    parameters:
+      api-gateway-app-name: api-gateway-{{timestamp}}
+    schema:
+      $ref: deploy.json
