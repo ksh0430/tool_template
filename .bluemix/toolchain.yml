@@ -1,18 +1,5 @@
 messages:
   $i18n: locales.yml
-template:
-  name:
-    $ref: "#/messages/template.name"
-  description:
-    $ref: "#/messages/template.description"
-  required:
-    - hello-world-build
-    - hello-world-repo
-  info:
-    git url: >-
-      [https://github.com/open-toolchain/secure-kube-toolchain](https://github.com/open-toolchain/secure-kube-toolchain)
-    git branch: >-
-      [master](https://github.com/open-toolchain/secure-kube-toolchain/tree/master)
 toolchain:
   name: 'secure-kubernetes-toolchain-{{timestamp}}'
   template:
