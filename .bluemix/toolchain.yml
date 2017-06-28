@@ -61,4 +61,10 @@ services:
   service_orion:
     parameters: {}
     service_id: orion
+  service_saucelabs:
+    parameters: {}
+    service_id: saucelabs
+  service_slack:
+    parameters: {}
+    service_id: slack
 version: '2'
