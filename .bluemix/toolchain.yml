@@ -8,61 +8,62 @@ toolchain:
 description: Wed Jun 28 01:27:06 UTC 2017-12
 name: PoC2_petclinic_microservice_jgkong
 form:
-  service_pipeline_PoC2-api-gateway-jgkong:
+  pipeline:
     parameters:
       api-gateway-app-name: api-gateway-{{timestamp}}
     schema:
       $ref: deploy.json
-service_apm:
-  parameters: {}
-  service_id: apm
-service_draservicebroker:
-  $ref: dra.yml
-  service_id: draservicebroker
-service_github_spring-petclinic-microservices:
-  parameters:
-    api_root_url: https://api.github.com
-    enable_traceability: false
-    extra_capabilities:
-    - capability_id: git.issues
-      dashboard_url: https://github.com/sdevopsadm/spring-petclinic-microservices/issues
-      display_name: Issues
-      enabled: true
+services:
+  service_apm:
+    parameters: {}
+    service_id: apm
+  service_draservicebroker:
+    $ref: dra.yml
+    service_id: draservicebroker
+  service_github_spring-petclinic-microservices:
+    parameters:
+      api_root_url: https://api.github.com
+      enable_traceability: false
+      extra_capabilities:
+      - capability_id: git.issues
+        dashboard_url: https://github.com/sdevopsadm/spring-petclinic-microservices/issues
+        display_name: Issues
+        enabled: true
+        label: spring-petclinic-microservices
+        tags:
+        - think
+        - code
+      has_issues: true
       label: spring-petclinic-microservices
-      tags:
-      - think
-      - code
-    has_issues: true
-    label: spring-petclinic-microservices
-    owner_id: sdevopsadm
-    private_repo: false
-    repo_name: spring-petclinic-microservices
-    repo_url: https://github.com/sdevopsadm/spring-petclinic-microservices.git
-    token_url: https://otc-github-public-broker.ng.bluemix.net/github/token
-    type: link
-  service_id: githubpublic
-service_nexus:
-  parameters: {}
-  service_id: nexus
-service_orion:
-  parameters: {}
-  service_id: orion
-service_pipeline_PoC2-api-gateway-jgkong:
-  parameters:
-    configuration:
-      content:
-        $text: pipeline_PoC2-api-gateway-jgkong.yml
-      env:
-        CF_APP_NAME: '{{form.pipeline.parameters.api-gateway-app-name}}'
-    name: PoC2-api-gateway-jgkong
-    services:
-    - service_github_spring-petclinic-microservices
-    ui_pipeline: true
-  service_id: pipeline
-service_saucelabs:
-  parameters: {}
-  service_id: saucelabs
-service_slack:
-  parameters: {}
-  service_id: slack
+      owner_id: sdevopsadm
+      private_repo: false
+      repo_name: spring-petclinic-microservices
+      repo_url: https://github.com/sdevopsadm/spring-petclinic-microservices.git
+      token_url: https://otc-github-public-broker.ng.bluemix.net/github/token
+      type: link
+    service_id: githubpublic
+  service_nexus:
+    parameters: {}
+    service_id: nexus
+  service_orion:
+    parameters: {}
+    service_id: orion
+  service_pipeline_PoC2-api-gateway-jgkong:
+    parameters:
+      configuration:
+        content:
+          $text: pipeline_PoC2-api-gateway-jgkong.yml
+        env:
+          CF_APP_NAME: '{{form.pipeline.parameters.api-gateway-app-name}}'
+      name: PoC2-api-gateway-jgkong
+      services:
+      - service_github_spring-petclinic-microservices
+      ui_pipeline: true
+    service_id: pipeline
+  service_saucelabs:
+    parameters: {}
+    service_id: saucelabs
+  service_slack:
+    parameters: {}
+    service_id: slack
 version: '2'
